@@ -1,0 +1,2 @@
+"""WebDuck Web UI."""
+

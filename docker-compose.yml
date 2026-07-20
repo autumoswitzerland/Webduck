@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  webduck:
+    build: .
+    ports:
+      - "9000:9000"
+    volumes:
+      - webduck_data:/data
+    environment:
+      - WEBDUCK_HOST=0.0.0.0
+      - WEBDUCK_PORT=8998
+    restart: unless-stopped
+
+volumes:
+  webduck_data:

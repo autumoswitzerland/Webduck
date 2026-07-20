@@ -1,0 +1,203 @@
+# German translations for WebDuck.
+# Copyright (C) 2026 autumo GmbH
+# This file is distributed under the same license as the WebDuck package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: WebDuck 0.1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-20 15:00+0000\n"
+"PO-Revision-Date: 2026-07-20 15:00+0000\n"
+"Last-Translator: autumo GmbH <info@autumo.ch>\n"
+"Language-Team: German\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+# General
+msgid "WebDuck"
+msgstr "WebDuck"
+
+msgid "version"
+msgstr "Version"
+
+# Navigation
+msgid "dashboard"
+msgstr "Übersicht"
+
+msgid "projects"
+msgstr "Projekte"
+
+msgid "databases"
+msgstr "Datenbanken"
+
+msgid "settings"
+msgstr "Einstellungen"
+
+msgid "logout"
+msgstr "Abmelden"
+
+# Auth
+msgid "login"
+msgstr "Anmelden"
+
+msgid "username"
+msgstr "Benutzername"
+
+msgid "password"
+msgstr "Passwort"
+
+msgid "login_button"
+msgstr "Anmelden"
+
+msgid "logout_button"
+msgstr "Abmelden"
+
+msgid "invalid_credentials"
+msgstr "Ungültiger Benutzername oder Passwort"
+
+# Dashboard
+msgid "dashboard_title"
+msgstr "Übersicht"
+
+msgid "total_projects"
+msgstr "Projekte gesamt"
+
+msgid "total_databases"
+msgstr "Datenbanken gesamt"
+
+msgid "server_status"
+msgstr "Serverstatus"
+
+# Projects
+msgid "projects_title"
+msgstr "Projekte"
+
+msgid "create_project"
+msgstr "Projekt erstellen"
+
+msgid "project_name"
+msgstr "Projektname"
+
+msgid "project_description"
+msgstr "Beschreibung"
+
+msgid "delete_project"
+msgstr "Projekt löschen"
+
+msgid "confirm_delete_project"
+msgstr "Möchten Sie dieses Projekt wirklich löschen?"
+
+# Databases
+msgid "databases_title"
+msgstr "Datenbanken"
+
+msgid "create_database"
+msgstr "Datenbank erstellen"
+
+msgid "database_name"
+msgstr "Datenbankname"
+
+msgid "delete_database"
+msgstr "Datenbank löschen"
+
+msgid "confirm_delete_database"
+msgstr "Möchten Sie diese Datenbank wirklich löschen?"
+
+# SQL Editor
+msgid "sql_editor"
+msgstr "SQL Editor"
+
+msgid "execute_query"
+msgstr "Abfrage ausführen"
+
+msgid "query_result"
+msgstr "Abfrageergebnis"
+
+msgid "no_results"
+msgstr "Keine Ergebnisse"
+
+msgid "rows_affected"
+msgstr "Zeilen betroffen"
+
+msgid "execution_time"
+msgstr "Ausführungszeit"
+
+# Tables
+msgid "tables"
+msgstr "Tabellen"
+
+msgid "columns"
+msgstr "Spalten"
+
+msgid "rows"
+msgstr "Zeilen"
+
+msgid "import_csv"
+msgstr "CSV importieren"
+
+msgid "export_csv"
+msgstr "CSV exportieren"
+
+# Errors
+msgid "error"
+msgstr "Fehler"
+
+msgid "success"
+msgstr "Erfolg"
+
+msgid "not_found"
+msgstr "Nicht gefunden"
+
+msgid "permission_denied"
+msgstr "Zugriff verweigert"
+
+msgid "server_error"
+msgstr "Serverfehler"
+
+# Actions
+msgid "save"
+msgstr "Speichern"
+
+msgid "cancel"
+msgstr "Abbrechen"
+
+msgid "delete"
+msgstr "Löschen"
+
+msgid "edit"
+msgstr "Bearbeiten"
+
+msgid "create"
+msgstr "Erstellen"
+
+msgid "close"
+msgstr "Schließen"
+
+msgid "confirm"
+msgstr "Bestätigen"
+
+# Language selector
+msgid "language"
+msgstr "Sprache"
+
+msgid "english"
+msgstr "Englisch"
+
+msgid "german"
+msgstr "Deutsch"
+
+msgid "french"
+msgstr "Französisch"
+
+# Additional UI strings
+msgid "navigation"
+msgstr "Navigation"
+
+msgid "online"
+msgstr "Online"
+
+msgid "no_projects_found"
+msgstr "Keine Projekte gefunden"

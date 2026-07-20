@@ -1,0 +1,2 @@
+"""WebDuck authentication module."""
+
