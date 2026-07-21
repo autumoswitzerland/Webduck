@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Duck body -->
+  <ellipse cx="28" cy="40" rx="20" ry="16" fill="#FFC107"/>
+  <!-- Duck head -->
+  <circle cx="40" cy="22" r="14" fill="#FFD54F"/>
+  <!-- Duck eye -->
+  <circle cx="44" cy="19" r="3" fill="#333"/>
+  <circle cx="45" cy="18" r="1" fill="#fff"/>
+  <!-- Duck beak -->
+  <path d="M52 24 L62 22 L54 28 Z" fill="#FF8F00"/>
+  <!-- Database cylinder on back -->
+  <ellipse cx="28" cy="30" rx="12" ry="4" fill="#FFE082" stroke="#F9A825" stroke-width="1"/>
+  <path d="M16 30 L16 40 Q16 44 28 44 Q40 44 40 40 L40 30" fill="none" stroke="#F9A825" stroke-width="1.5"/>
+  <path d="M16 34 Q28 38 40 34" fill="none" stroke="#F9A825" stroke-width="1"/>
+  <path d="M16 37 Q28 41 40 37" fill="none" stroke="#F9A825" stroke-width="1"/>
+  <!-- Duck tail -->
+  <path d="M8 36 Q2 30 6 24 Q10 28 12 32 Z" fill="#FFB300"/>
+</svg>

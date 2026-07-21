@@ -1,3 +1,5 @@
+version: "1.0.0"
+icon: "icon.svg"
 auth:
   jwt_algorithm: HS256
   jwt_expire_minutes: 60

@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -e .
 RUN mkdir -p /data
 
 # Expose port
-EXPOSE 9000
+EXPOSE 8998
 
 # Volume for persistent data
 VOLUME ["/data"]

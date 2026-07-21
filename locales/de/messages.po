@@ -120,7 +120,34 @@ msgid "no_results"
 msgstr "Keine Ergebnisse"
 
 msgid "rows_affected"
-msgstr "Zeilen betroffen"
+msgstr "Zeile(n) betroffen"
+
+msgid "row_inserted"
+msgstr "%d Zeile eingefügt"
+
+msgid "rows_inserted"
+msgstr "%d Zeilen eingefügt"
+
+msgid "row_updated"
+msgstr "%d Zeile aktualisiert"
+
+msgid "rows_updated"
+msgstr "%d Zeilen aktualisiert"
+
+msgid "row_deleted"
+msgstr "%d Zeile gelöscht"
+
+msgid "rows_deleted"
+msgstr "%d Zeilen gelöscht"
+
+msgid "query_executed"
+msgstr "Abfrage erfolgreich ausgeführt"
+
+msgid "row_returned"
+msgstr "%d Zeile zurückgegeben"
+
+msgid "rows_returned"
+msgstr "%d Zeilen zurückgegeben"
 
 msgid "execution_time"
 msgstr "Ausführungszeit"

@@ -122,6 +122,33 @@ msgstr "No results"
 msgid "rows_affected"
 msgstr "rows affected"
 
+msgid "row_inserted"
+msgstr "%d row inserted"
+
+msgid "rows_inserted"
+msgstr "%d rows inserted"
+
+msgid "row_updated"
+msgstr "%d row updated"
+
+msgid "rows_updated"
+msgstr "%d rows updated"
+
+msgid "row_deleted"
+msgstr "%d row deleted"
+
+msgid "rows_deleted"
+msgstr "%d rows deleted"
+
+msgid "query_executed"
+msgstr "Query executed successfully"
+
+msgid "row_returned"
+msgstr "%d row returned"
+
+msgid "rows_returned"
+msgstr "%d rows returned"
+
 msgid "execution_time"
 msgstr "Execution time"
 

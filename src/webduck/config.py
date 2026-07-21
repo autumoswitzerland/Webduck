@@ -19,7 +19,7 @@
 #
 #  Project:   WebDuck
 #  Author:    autumo GmbH
-#  Version:   0.1.0
+#  Version:   1.0.0
 #  Date:      2026-07-20
 # =============================================================================
 
@@ -59,8 +59,8 @@ class LoggingConfig(BaseModel):
 class WebDuckConfig(BaseModel):
     """Main WebDuck configuration."""
 
-    version: str = "0.1.0"
-    icon: str = "🦆"
+    version: str = "1.0.0"
+    icon: str = ""
     server: ServerConfig = Field(default_factory=ServerConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

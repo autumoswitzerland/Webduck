@@ -20,7 +20,7 @@
 #
 #  Project:   WebDuck
 #  Author:    autumo GmbH
-#  Version:   0.1.0
+#  Version:   1.0.0
 #  Date:      2026-07-20
 # =============================================================================
 
@@ -31,8 +31,9 @@ import sys
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from nicegui import app as nicegui_app
 from nicegui import ui
 
@@ -46,8 +47,8 @@ from webduck.storage.engine import StorageEngine
 _config: WebDuckConfig | None = None
 _storage: StorageEngine | None = None
 _auth: AuthManager | None = None
-_version: str = "0.1.0"
-_icon: str = "🦆"
+_version: str = ""
+_icon: str = ""
 
 # ── Theme colors ──────────────────────────────────────────────
 _YELLOW = "#FFD54F"
@@ -67,10 +68,19 @@ body {{
     background: {_BG_DARK} !important;
     color: {_TEXT_SOFT} !important;
 }}
+* {{
+    box-shadow: none !important;
+}}
+.q-page {{
+    padding-top: 6px !important;
+}}
 .q-card {{
     background: {_BG_CARD};
     border: 1px solid {_BORDER};
-    box-shadow: none !important;
+}}
+.q-card .q-card {{
+    background: #1c1c1c;
+    border-color: #2a2a2a;
 }}
 .q-item__label {{
     color: {_TEXT_SOFT} !important;
@@ -127,6 +137,9 @@ body {{
     background-color: {_BG_CARD} !important;
     color: {_TEXT_SOFT} !important;
 }}
+.border-button.q-btn--outline:before {{
+    border-color: #333333 !important;
+}}
 </style>
 """
 
@@ -138,6 +151,8 @@ def setup_app(config: WebDuckConfig) -> FastAPI:
     _config = config
     _version = config.version
     _icon = config.icon
+    import webduck
+    webduck.__version__ = _version
     _storage = StorageEngine(config.server.data_dir)
     _auth = AuthManager(
         config.server.data_dir,
@@ -165,6 +180,13 @@ def setup_app(config: WebDuckConfig) -> FastAPI:
     async def health():
         return {"status": "ok"}
 
+    static_dir = Path(__file__).resolve().parent.parent.parent / "static"
+    if static_dir.exists():
+        fastapi_app.mount(
+            "/static", StaticFiles(directory=str(static_dir)),
+            name="static",
+        )
+
     return fastapi_app
 
 
@@ -186,14 +208,18 @@ def _make_header(_, page_title: str = ""):
         title_text += f" — {page_title}"
 
     with ui.header().classes("bg-[#1a1a1a] items-center"):
-        ui.label(_icon).classes("text-h5")
-        with ui.row().classes("items-baseline gap-3"):
-            ui.label(title_text).classes("text-h6 text-bold").style(
+        with ui.row().classes("items-center gap-2"):
+            if _icon:
+                ui.html(
+                    f'<img src="/static/{_icon}" alt="icon" '
+                    f'style="height:28px; vertical-align:middle;">'
+                )
+            ui.label(title_text).classes("text-h5 text-bold").style(
                 f"color: {_YELLOW}"
             )
             ui.html(
                 '<span style="color: #888; font-style: italic; '
-                'font-size: 0.9em;">powered by '
+                'font-size: 0.85em; position: relative; top: 4px;">powered by '
                 '<a href="https://autumo.ch" target="_blank" '
                 'style="color: #aaa; text-decoration: none;">'
                 'autumo GmbH</a></span>'
@@ -205,7 +231,7 @@ def _make_header(_, page_title: str = ""):
             ).classes("text-bold").style(f"color: {_TEXT_DIM}")
             ui.button(
                 _("logout"), on_click=_do_logout
-            ).props("outline color=red")
+            ).props("outline color=red").classes("border-button")
 
 
 def _make_drawer(_):
@@ -230,12 +256,23 @@ def create_ui_pages():
         get_language_name,
         get_supported_languages,
         get_translator,
+        get_user_translator,
     )
 
     # ── Login ──────────────────────────────────────────────────
     @ui.page("/login")
-    def login_page():
-        _ = get_translator()
+    def login_page(request: Request):
+        browser_lang = request.headers.get(
+            "accept-language", "en"
+        )[:2]
+        saved_lang = nicegui_app.storage.user.get(
+            "language", browser_lang
+        )
+        if saved_lang not in get_supported_languages():
+            saved_lang = "en"
+        nicegui_app.storage.user["language"] = saved_lang
+
+        _ = get_translator(saved_lang)
         _apply_dark_theme()
         ui.page_title(f"WebDuck {_version} — Login")
 
@@ -243,10 +280,16 @@ def create_ui_pages():
             f"background: {_BG_CARD}"
         ):
             with ui.row().classes("items-center gap-2"):
-                ui.label(_icon).classes("text-h4")
+                if _icon:
+                    ui.html(
+                        f'<img src="/static/{_icon}" alt="icon" '
+                        f'style="height:36px; vertical-align:middle;">'
+                    )
                 ui.label(f"WebDuck {_version}").classes(
                     "text-h4 text-bold"
                 ).style(f"color: {_YELLOW}")
+
+            ui.space().classes("h-3")
 
             username = ui.input(_("username")).classes("w-full")
             password = ui.input(
@@ -266,25 +309,36 @@ def create_ui_pages():
                         _("invalid_credentials"), type="negative"
                     )
 
+            ui.on("keydown.enter", handle_login)
+
             ui.button(
                 _("login_button"), on_click=handle_login
             ).classes("w-full")
 
-        with ui.row().classes("absolute-bottom-right"):
-            for lang in get_supported_languages():
-                def set_lang(lang=lang):
+            ui.space().classes("h-3")
+
+            lang_options = {
+                code: get_language_name(code)
+                for code in get_supported_languages()
+            }
+
+            lang_select = ui.select(
+                lang_options,
+                value=saved_lang,
+                on_change=lambda e: (
                     nicegui_app.storage.user.update(
-                        {"language": lang}
-                    )
-                    ui.navigate.reload()
-                ui.button(
-                    get_language_name(lang), on_click=set_lang,
-                ).props("flat dense")
+                        {"language": e.value}
+                    ),
+                    ui.navigate.reload(),
+                ),
+            ).classes("w-full q-mt-sm").props(
+                "outlined dense"
+            )
 
     # ── Dashboard ──────────────────────────────────────────────
     @ui.page("/")
     def dashboard_page():
-        _ = get_translator()
+        _ = get_user_translator()
         _apply_dark_theme()
         ui.page_title(f"WebDuck {_version} — Dashboard")
 
@@ -294,8 +348,6 @@ def create_ui_pages():
 
         _make_header(_)
         _make_drawer(_)
-
-        ui.space().classes("h-2")
 
         with ui.card().classes("w-full"):
             ui.label(_("dashboard_title")).classes(
@@ -335,7 +387,7 @@ def create_ui_pages():
     # ── Projects ───────────────────────────────────────────────
     @ui.page("/projects")
     def projects_page():
-        _ = get_translator()
+        _ = get_user_translator()
         _apply_dark_theme()
         ui.page_title(f"WebDuck {_version} — Projects")
 
@@ -346,10 +398,8 @@ def create_ui_pages():
         _make_header(_)
         _make_drawer(_)
 
-        ui.space().classes("h-2")
-
         # ── Page title ─────────────────────────────────────
-        with ui.card().classes("w-full"):
+        with ui.card().classes("w-full").style("margin-top: 4px"):
             ui.label(_("projects_title")).classes(
                 "text-h5"
             ).style(f"color: {_YELLOW}")
@@ -377,7 +427,7 @@ def create_ui_pages():
 
                 ui.button(
                     _("create_project"), on_click=create_project
-                ).props("outline")
+                ).props("outline").classes("border-button")
 
         # ── Project list ───────────────────────────────────
         projects = _storage.list_projects()
@@ -386,9 +436,16 @@ def create_ui_pages():
                 with ui.card().classes("w-full q-mt-sm"):
                     # ── Project header row ─────────────────
                     with ui.row().classes(
-                        "items-center gap-4"
+                        "w-full items-center gap-2"
                     ):
-                        ui.label(f"📁 {project}").classes(
+                        ui.html(
+                            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" '
+                            'stroke="#FFE082" stroke-width="2" stroke-linecap="round" '
+                            'stroke-linejoin="round" style="vertical-align: middle;">'
+                            '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 '
+                            '2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
+                        )
+                        ui.label(project).classes(
                             "text-h6"
                         ).style(f"color: {_YELLOW_LIGHT}")
                         ui.space()
@@ -414,7 +471,7 @@ def create_ui_pages():
                         ui.button(
                             _("delete"),
                             on_click=delete_project,
-                        ).props("outline color=red")
+                        ).props("outline color=red").classes("border-button")
 
                     # ── Existing databases (sub-card) ──────
                     dbs = _storage.list_databases(project)
@@ -422,7 +479,7 @@ def create_ui_pages():
                         with ui.card().classes(
                             "w-full q-mt-sm"
                         ).style(
-                            "background: #181818; "
+                            "background: #1c1c1c; "
                             "border-color: #2a2a2a"
                         ):
                             ui.label(_("databases")).classes(
@@ -430,11 +487,19 @@ def create_ui_pages():
                             ).style(f"color: {_YELLOW_DARK}")
                             for db_name in dbs:
                                 with ui.row().classes(
-                                    "w-full items-center"
-                                ).style("justify-content: space-between"):
-                                    ui.label(
-                                        f"🗄️ {db_name}"
-                                    ).classes("text-body2")
+                                    "w-full items-center gap-2"
+                                ):
+                                    ui.html(
+                                        '<svg width="16" height="16" viewBox="0 0 24 24" '
+                                        'fill="none" stroke="#999" stroke-width="2" '
+                                        'stroke-linecap="round" stroke-linejoin="round" '
+                                        'style="vertical-align: middle;">'
+                                        '<ellipse cx="12" cy="5" rx="9" ry="3"/>'
+                                        '<path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>'
+                                        '<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>'
+                                    )
+                                    ui.label(db_name).classes("text-body2")
+                                    ui.space()
                                     async def delete_db(
                                         p=project, d=db_name
                                     ):
@@ -455,21 +520,21 @@ def create_ui_pages():
                                         _("delete"),
                                         on_click=delete_db,
                                     ).props(
-                                        "outline color=red size=sm"
-                                    )
+                                        "outline color=red size=md"
+                                    ).classes("border-button")
 
                     # ── Create database (sub-card) ─────────
                     with ui.card().classes(
                         "w-full q-mt-sm"
                     ).style(
-                        "background: #181818; "
+                        "background: #1c1c1c; "
                         "border-color: #2a2a2a"
                     ):
                         ui.label(_("create_database")).classes(
                             "text-caption text-bold"
                         ).style(f"color: {_YELLOW_DARK}")
                         with ui.row().classes(
-                            "items-center gap-4"
+                            "w-full items-center gap-4"
                         ):
                             new_db_name = ui.input(
                                 _("database_name")
@@ -495,7 +560,7 @@ def create_ui_pages():
                             ui.button(
                                 _("create_database"),
                                 on_click=create_db,
-                            ).props("outline color=amber")
+                            ).props("outline color=amber").classes("border-button")
         else:
             with ui.card().classes("w-full q-mt-sm"):
                 ui.label(_("no_projects_found")).classes(
@@ -505,7 +570,7 @@ def create_ui_pages():
     # ── SQL Editor ─────────────────────────────────────────────
     @ui.page("/query")
     def query_page():
-        _ = get_translator()
+        _ = get_user_translator()
         _apply_dark_theme()
         ui.page_title(f"WebDuck {_version} — SQL Editor")
 
@@ -515,8 +580,6 @@ def create_ui_pages():
 
         _make_header(_)
         _make_drawer(_)
-
-        ui.space().classes("h-2")
 
         with ui.card().classes("w-full"):
             ui.label(_("sql_editor")).classes(
@@ -556,13 +619,52 @@ def create_ui_pages():
                 placeholder="SELECT * FROM table_name",
             ).classes("w-full")
 
-            result_area = ui.card().classes("w-full mt-4")
+            result_area = ui.card().classes("w-full mt-4 shadow-none")
+
+            import re as _re
+
+            def _result_message(result, sql_text):
+                if not result["success"]:
+                    return None, result["error"]
+                sql_upper = sql_text.strip().upper()
+                is_ddl_dml = sql_upper.split()[0] in (
+                    "CREATE", "DROP", "ALTER", "INSERT",
+                    "UPDATE", "DELETE", "TRUNCATE",
+                )
+                if result["columns"] and not is_ddl_dml:
+                    return "table", result
+                rc = result.get("row_count", 0)
+                if sql_upper.startswith("INSERT"):
+                    key = "row_inserted" if rc == 1 else "rows_inserted"
+                    return "text", _(key) % rc
+                elif sql_upper.startswith("UPDATE"):
+                    key = "row_updated" if rc == 1 else "rows_updated"
+                    return "text", _(key) % rc
+                elif sql_upper.startswith("DELETE"):
+                    key = "row_deleted" if rc == 1 else "rows_deleted"
+                    return "text", _(key) % rc
+                elif sql_upper.startswith("CREATE TABLE"):
+                    m = _re.search(
+                        r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"\']?(\w+)',
+                        sql_text, _re.IGNORECASE,
+                    )
+                    tbl = m.group(1) if m else "?"
+                    return "text", f"Table '{tbl}' created"
+                elif sql_upper.startswith("DROP TABLE"):
+                    m = _re.search(
+                        r'DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?[`"\']?(\w+)',
+                        sql_text, _re.IGNORECASE,
+                    )
+                    tbl = m.group(1) if m else "?"
+                    return "text", f"Table '{tbl}' dropped"
+                else:
+                    return "text", _("query_executed")
 
             async def execute_query():
                 if not sql_input.value or not database_select.value:
                     return
 
-                result = _storage.execute_query(
+                results = _storage.execute_queries(
                     project_select.value,
                     database_select.value,
                     sql_input.value,
@@ -570,38 +672,36 @@ def create_ui_pages():
 
                 with result_area:
                     result_area.clear()
-                    if result["success"]:
-                        if result["columns"]:
+                    all_ok = True
+                    for result in results:
+                        kind, data = _result_message(result, result.get("sql", ""))
+                        if kind == "table":
                             ui.table(
                                 columns=[
-                                    {
-                                        "name": c,
-                                        "label": c,
-                                        "field": c,
-                                    }
-                                    for c in result["columns"]
+                                    {"name": c, "label": c, "field": c}
+                                    for c in data["columns"]
                                 ],
                                 rows=[
-                                    {
-                                        c: v
-                                        for c, v in zip(
-                                            result["columns"],
-                                            row,
-                                        )
-                                    }
-                                    for row in result["rows"]
+                                    {c: v for c, v in zip(data["columns"], row)}
+                                    for row in data["rows"]
                                 ],
-                            ).classes("w-full")
+                            ).classes("w-full").props("flat bordered")
+                            rc = data["row_count"]
+                            key = "row_returned" if rc == 1 else "rows_returned"
+                            ui.label(_(key) % rc).classes(
+                                "text-caption q-mt-sm"
+                            ).style(f"color: {_TEXT_DIM}")
+                        elif kind == "text":
+                            ui.label(data).style(f"color: {_TEXT_DIM}")
                         else:
-                            ui.label(_("no_results"))
-                    else:
-                        ui.label(result["error"]).classes(
-                            "text-negative"
-                        )
+                            ui.label(data).classes("text-negative")
+                            all_ok = False
+                    if all_ok:
+                        sql_input.value = ""
 
             ui.button(
                 _("execute_query"), on_click=execute_query
-            ).props("outline color=amber").classes("mt-2")
+            ).props("outline color=amber").classes("mt-2 border-button")
 
 
 # --- CLI ---
@@ -703,10 +803,19 @@ def main():
         fastapi_app = setup_app(cfg)
         create_ui_pages()
 
+        favicon_path = None
+        if cfg.icon:
+            candidate = Path(__file__).resolve().parent.parent.parent / "static" / cfg.icon
+            if candidate.exists() and candidate.suffix == ".svg":
+                favicon_path = candidate.read_text()
+            elif candidate.exists():
+                favicon_path = str(candidate)
+
         ui.run_with(
             fastapi_app,
             mount_path="/ui",
             storage_secret=cfg.auth.jwt_secret,
+            favicon=favicon_path,
         )
 
         click.echo("")

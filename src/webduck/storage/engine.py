@@ -20,7 +20,7 @@
 #
 #  Project:   WebDuck
 #  Author:    autumo GmbH
-#  Version:   0.1.0
+#  Version:   1.0.0
 #  Date:      2026-07-20
 # =============================================================================
 
@@ -138,19 +138,42 @@ class StorageEngine:
                     if result.description:
                         columns = [desc[0] for desc in result.description]
                         rows = [list(r) for r in result.fetchall()]
+                        row_count = len(rows)
                     else:
                         columns = []
                         rows = []
+                        row_count = result.rowcount if hasattr(result, 'rowcount') and result.rowcount >= 0 else 0
                     return {
                         "success": True,
                         "columns": columns,
                         "rows": rows,
-                        "row_count": len(rows),
+                        "row_count": row_count,
                     }
                 finally:
                     con.close()
             except Exception as e:
                 return {"success": False, "error": str(e)}
+
+    def execute_queries(
+        self,
+        project: str,
+        database: str,
+        sql: str,
+        read_only: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Execute one or more SQL statements and return results for each."""
+        import re
+        statements = [s.strip() for s in re.split(r';\s*(?=\S)', sql) if s.strip()]
+        if not statements:
+            return []
+        results = []
+        for stmt in statements:
+            r = self.execute_query(project, database, stmt, read_only=read_only)
+            r["sql"] = stmt
+            results.append(r)
+            if not r["success"]:
+                break
+        return results
 
     def get_table_info(self, project: str, database: str) -> dict[str, Any]:
         """Get information about all tables in a database."""

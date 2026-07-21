@@ -20,7 +20,7 @@
 #
 #  Project:   WebDuck
 #  Author:    autumo GmbH
-#  Version:   0.1.0
+#  Version:   1.0.0
 #  Date:      2026-07-20
 # =============================================================================
 
@@ -41,28 +41,36 @@ LOCALES_DIR = Path(__file__).parent.parent.parent / "locales"
 
 
 def _ensure_mo_files() -> None:
-    """Compile PO files to MO files if they don't exist."""
+    """Compile PO files to MO files if outdated or missing."""
     for lang in SUPPORTED_LANGUAGES:
         lang_dir = LOCALES_DIR / lang
         po_file = lang_dir / "messages.po"
         lc_messages_dir = lang_dir / "LC_MESSAGES"
         mo_file = lc_messages_dir / "messages.mo"
 
-        if not mo_file.exists() and po_file.exists():
-            try:
-                from babel.messages.mofile import write_mo
-                from babel.messages.pofile import read_po
+        if not po_file.exists():
+            continue
 
-                lc_messages_dir.mkdir(parents=True, exist_ok=True)
+        needs_compile = (
+            not mo_file.exists()
+            or mo_file.stat().st_mtime < po_file.stat().st_mtime
+        )
+        if not needs_compile:
+            continue
 
-                with open(po_file, "rb") as f:
-                    catalog = read_po(f)
+        try:
+            from babel.messages.mofile import write_mo
+            from babel.messages.pofile import read_po
 
-                with open(mo_file, "wb") as f:
-                    write_mo(f, catalog)
-            except ImportError:
-                # babel not installed, skip compilation
-                pass
+            lc_messages_dir.mkdir(parents=True, exist_ok=True)
+
+            with open(po_file, "rb") as f:
+                catalog = read_po(f)
+
+            with open(mo_file, "wb") as f:
+                write_mo(f, catalog)
+        except ImportError:
+            pass
 
 
 def get_translator(language: str | None = None) -> Callable[[str], str]:
@@ -94,6 +102,16 @@ def get_translator(language: str | None = None) -> Callable[[str], str]:
         translation = gettext.NullTranslations()
 
     return translation.gettext
+
+
+def get_user_translator() -> Callable[[str], str]:
+    """Get translator using the current user's language from session storage."""
+    try:
+        from nicegui import app as nicegui_app
+        lang = nicegui_app.storage.user.get("language", DEFAULT_LANGUAGE)
+    except Exception:
+        lang = DEFAULT_LANGUAGE
+    return get_translator(lang)
 
 
 def get_supported_languages() -> list[str]:
