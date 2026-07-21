@@ -69,6 +69,8 @@ def _ensure_mo_files() -> None:
 
             with open(mo_file, "wb") as f:
                 write_mo(f, catalog)
+
+            print(f"[i18n] Compiled {po_file} -> {mo_file}")
         except ImportError:
             pass
 

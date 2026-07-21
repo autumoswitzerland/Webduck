@@ -135,14 +135,14 @@ class StorageEngine:
                 con = duckdb.connect(str(db_path), read_only=read_only)
                 try:
                     result = con.execute(sql, params or None)
-                    if result.description:
+                    if result is not None and result.description:
                         columns = [desc[0] for desc in result.description]
                         rows = [list(r) for r in result.fetchall()]
                         row_count = len(rows)
                     else:
                         columns = []
                         rows = []
-                        row_count = result.rowcount if hasattr(result, 'rowcount') and result.rowcount >= 0 else 0
+                        row_count = 0
                     return {
                         "success": True,
                         "columns": columns,
@@ -162,8 +162,7 @@ class StorageEngine:
         read_only: bool = False,
     ) -> list[dict[str, Any]]:
         """Execute one or more SQL statements and return results for each."""
-        import re
-        statements = [s.strip() for s in re.split(r';\s*(?=\S)', sql) if s.strip()]
+        statements = [s.strip() for s in sql.split(";") if s.strip()]
         if not statements:
             return []
         results = []

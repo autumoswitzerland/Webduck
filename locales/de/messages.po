@@ -108,7 +108,7 @@ msgstr "Möchten Sie diese Datenbank wirklich löschen?"
 
 # SQL Editor
 msgid "sql_editor"
-msgstr "SQL Editor"
+msgstr "SQL Abfragen"
 
 msgid "execute_query"
 msgstr "Abfrage ausführen"
@@ -228,3 +228,33 @@ msgstr "Online"
 
 msgid "no_projects_found"
 msgstr "Keine Projekte gefunden"
+
+msgid "select_database"
+msgstr "Datenbank auswählen"
+
+msgid "sql_queries"
+msgstr "SQL Abfragen"
+
+msgid "sql_upload"
+msgstr "SQL Upload"
+
+msgid "execute_upload"
+msgstr "SQL-Datei ausführen"
+
+msgid "drop_sql_file"
+msgstr "SQL-Datei hier ablegen oder klicken zum Auswählen"
+
+msgid "file_too_large"
+msgstr "Datei zu gross (max 2 MB)"
+
+msgid "file_loaded"
+msgstr "Geladen: %s"
+
+msgid "statement_executed"
+msgstr "%d Anweisung erfolgreich ausgeführt"
+
+msgid "statements_executed"
+msgstr "%d Anweisungen erfolgreich ausgeführt"
+
+msgid "no_file_loaded"
+msgstr "Keine SQL-Datei geladen"

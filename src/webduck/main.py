@@ -26,6 +26,7 @@
 
 """WebDuck - Main application entry point."""
 
+import asyncio
 import secrets
 import sys
 from pathlib import Path
@@ -567,12 +568,12 @@ def create_ui_pages():
                     "text-caption"
                 )
 
-    # ── SQL Editor ─────────────────────────────────────────────
+    # ── SQL Queries + Upload ────────────────────────────────────
     @ui.page("/query")
     def query_page():
         _ = get_user_translator()
         _apply_dark_theme()
-        ui.page_title(f"WebDuck {_version} — SQL Editor")
+        ui.page_title(f"WebDuck {_version} — SQL Queries")
 
         if "token" not in nicegui_app.storage.user:
             ui.navigate.to("/login")
@@ -581,8 +582,9 @@ def create_ui_pages():
         _make_header(_)
         _make_drawer(_)
 
+        # ── Card 1: Project & DB Selection (shared) ────────────
         with ui.card().classes("w-full"):
-            ui.label(_("sql_editor")).classes(
+            ui.label(_("select_database")).classes(
                 "text-h5"
             ).style(f"color: {_YELLOW}")
 
@@ -611,6 +613,12 @@ def create_ui_pages():
 
                 project_select.on("change", update_databases)
                 update_databases()
+
+        # ── Card 2: SQL Queries ────────────────────────────────
+        with ui.card().classes("w-full q-mt-sm"):
+            ui.label(_("sql_queries")).classes(
+                "text-h5"
+            ).style(f"color: {_YELLOW}")
 
             ui.label("SQL").classes("text-caption text-bold q-mb-xs").style(
                 f"color: {_YELLOW_LIGHT}"
@@ -701,6 +709,165 @@ def create_ui_pages():
 
             ui.button(
                 _("execute_query"), on_click=execute_query
+            ).props("outline color=amber").classes("mt-2 border-button")
+
+        # ── Card 3: SQL Upload ─────────────────────────────────
+        with ui.card().classes("w-full q-mt-sm"):
+            ui.label(_("sql_upload")).classes(
+                "text-h5"
+            ).style(f"color: {_YELLOW}")
+
+            dsf = _("drop_sql_file")
+            drop_html = f"""
+            <div id="sql-drop-zone" style="
+                border: 2px dashed #444;
+                border-radius: 8px;
+                padding: 32px;
+                text-align: center;
+                color: #888;
+                cursor: pointer;
+                margin-bottom: 12px;
+            ">
+                {dsf}
+                <input type="file" id="sql-file-input"
+                    accept=".sql,.txt" style="display:none;">
+                <div id="sql-file-info"
+                    style="margin-top: 8px; font-size: 0.9em;">
+                </div>
+            </div>
+            """
+            ui.html(drop_html)
+
+            js_setup = f"""
+            setTimeout(function() {{
+                var zone = document.getElementById('sql-drop-zone');
+                var fileInput = document.getElementById('sql-file-input');
+                if (!zone || !fileInput) return;
+
+                zone.addEventListener('click', function() {{
+                    fileInput.click();
+                }});
+
+                zone.addEventListener('dragover', function(e) {{
+                    e.preventDefault();
+                    zone.style.borderColor = '{_YELLOW}';
+                    zone.style.background = '#1a1a1a';
+                }});
+
+                zone.addEventListener('dragleave', function() {{
+                    zone.style.borderColor = '#444';
+                    zone.style.background = 'transparent';
+                }});
+
+                zone.addEventListener('drop', function(e) {{
+                    e.preventDefault();
+                    zone.style.borderColor = '#444';
+                    zone.style.background = 'transparent';
+                    var file = e.dataTransfer.files[0];
+                    if (file) readFile(file);
+                }});
+
+                fileInput.addEventListener('change', function(e) {{
+                    var file = e.target.files[0];
+                    if (file) readFile(file);
+                }});
+
+                function readFile(file) {{
+                    if (file.size > 2097152) {{
+                        alert('{_("file_too_large")}');
+                        return;
+                    }}
+                    var reader = new FileReader();
+                    reader.onload = function(e) {{
+                        window._sqlUploadContent = e.target.result;
+                        var info = document.getElementById('sql-file-info');
+                        if (info) {{
+                            var sizeKB = (file.size / 1024).toFixed(1);
+                            var msg = '{_("file_loaded")}'.replace(
+                                '%s', file.name + ' (' + sizeKB + ' KB)'
+                            );
+                            info.textContent = msg;
+                            info.style.color = '{_TEXT_SOFT}';
+                        }}
+                    }};
+                    reader.readAsText(file);
+                }}
+            }}, 100);
+            """
+            ui.run_javascript(js_setup)
+
+            sql_upload_input = ui.textarea(
+                placeholder=_("no_file_loaded"),
+            ).classes("w-full").style("min-height: 150px;")
+
+            upload_result_area = ui.card().classes("w-full mt-4 shadow-none")
+
+            async def execute_upload():
+                if not database_select.value:
+                    return
+
+                js_result = await ui.run_javascript(
+                    'window._sqlUploadContent || ""',
+                    timeout=3,
+                )
+                sql_text = js_result or sql_upload_input.value
+                if not sql_text:
+                    return
+
+                with ui.dialog() as progress_dialog, ui.card().classes(
+                    "items-center gap-4"
+                ).style(
+                    "background: #1E1E1E; border-radius: 12px; padding: 32px 48px;"
+                ):
+                    ui.spinner(size="xl", color="amber")
+                    ui.label(_("sql_upload")).style(
+                        f"color: {_TEXT_SOFT}; font-size: 1.1em;"
+                    )
+                progress_dialog.open()
+
+                results = await asyncio.to_thread(
+                    _storage.execute_queries,
+                    project_select.value,
+                    database_select.value,
+                    sql_text,
+                )
+
+                progress_dialog.close()
+
+                with upload_result_area:
+                    upload_result_area.clear()
+                    error_count = 0
+                    success_count = 0
+                    for result in results:
+                        if result["success"]:
+                            success_count += 1
+                        else:
+                            error_count += 1
+                            ui.label(result["error"]).classes("text-negative")
+
+                    if error_count == 0 and success_count > 0:
+                        key = "statement_executed" if success_count == 1 else "statements_executed"
+                        ui.label(_(key) % success_count).style(
+                            "color: #66BB6A"
+                        )
+                        sql_upload_input.value = ""
+                        await ui.run_javascript(
+                            """
+                            window._sqlUploadContent = "";
+                            var info = document.getElementById('sql-file-info');
+                            if (info) { info.textContent = ''; }
+                            var zone = document.getElementById('sql-drop-zone');
+                            if (zone) { zone.style.borderColor = '#444'; }
+                            """,
+                            timeout=3,
+                        )
+                    elif error_count == 0 and success_count == 0:
+                        ui.label(_("no_file_loaded")).style(
+                            f"color: {_TEXT_DIM}"
+                        )
+
+            ui.button(
+                _("execute_upload"), on_click=execute_upload
             ).props("outline color=amber").classes("mt-2 border-button")
 
 
