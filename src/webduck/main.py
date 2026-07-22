@@ -50,13 +50,20 @@ _storage: StorageEngine | None = None
 _auth: AuthManager | None = None
 _version: str = ""
 _icon: str = ""
+_drawer = None
+
+# ── General constants ─────────────────────────────────────────
+_AUTUMO_URL = "https://autumo.ch"
+_DOCS_URL = "https://webduck.autumo.ch"
 
 # ── Theme colors ──────────────────────────────────────────────
 _YELLOW = "#FFD54F"
 _YELLOW_LIGHT = "#FFE082"
 _YELLOW_DARK = "#FFC107"
+_YELLOW_DARKER = "#806002"
 _TEXT_SOFT = "#E0E0E0"
 _TEXT_DIM = "#999999"
+_TEXT_PLACEHOLDER = "#666666"
 _BG_DARK = "#121212"
 _BG_CARD = "#1E1E1E"
 _BORDER = "#333333"
@@ -68,6 +75,7 @@ _DARK_CSS = f"""
 body {{
     background: {_BG_DARK} !important;
     color: {_TEXT_SOFT} !important;
+    zoom: 1.1;
 }}
 * {{
     box-shadow: none !important;
@@ -87,13 +95,13 @@ body {{
     color: {_TEXT_SOFT} !important;
 }}
 .q-field__label {{
-    color: {_YELLOW_LIGHT} !important;
+    color: {_YELLOW_DARK} !important;
 }}
 .q-field__control:before {{
     border-color: #333 !important;
 }}
 .q-field__native::placeholder {{
-    color: #555 !important;
+    color: #777 !important;
     opacity: 1 !important;
 }}
 .q-table {{
@@ -127,10 +135,12 @@ body {{
 }}
 .q-btn--outline {{
     border-color: #555 !important;
-    color: inherit;
 }}
 .q-separator {{
     display: none !important;
+}}
+.text-caption {{
+    color: {_TEXT_DIM} !important;
 }}
 .nicegui-error-popup {{
     border-radius: 12px !important;
@@ -140,10 +150,10 @@ body {{
 }}
 .border-button.q-btn--outline:before {{
     border-color: #333333 !important;
+    background-color: #282828 !important;
 }}
 </style>
 """
-
 
 def setup_app(config: WebDuckConfig) -> FastAPI:
     """Set up FastAPI app with NiceGUI integration."""
@@ -195,6 +205,11 @@ def _apply_dark_theme():
     """Enable dark mode and inject custom yellow-accent CSS."""
     ui.dark_mode(True)
     ui.add_head_html(_DARK_CSS)
+    ui.add_css('''
+        .q-separator--vertical.nicegui-separator {
+            width: 1px !important;
+        }
+    ''', shared=True)
 
 
 def _do_logout():
@@ -203,7 +218,8 @@ def _do_logout():
 
 
 def _make_header(_, page_title: str = ""):
-    """Shared header with versioned title, icon, and bold username."""
+    """Shared header with versioned title, icon."""
+    global _drawer
     title_text = f"WebDuck {_version}"
     if page_title:
         title_text += f" — {page_title}"
@@ -218,26 +234,34 @@ def _make_header(_, page_title: str = ""):
             ui.label(title_text).classes("text-h5 text-bold").style(
                 f"color: {_YELLOW}"
             )
-            ui.html(
-                '<span style="color: #888; font-style: italic; '
-                'font-size: 0.85em; position: relative; top: 4px;">powered by '
-                '<a href="https://autumo.ch" target="_blank" '
-                'style="color: #aaa; text-decoration: none;">'
-                'autumo GmbH</a></span>'
-            )
         ui.space()
         with ui.row().classes("items-center gap-4"):
-            ui.label(
-                nicegui_app.storage.user.get("username", "")
-            ).classes("text-bold").style(f"color: {_TEXT_DIM}")
+            
+            """
+            ui.button(
+                "API", 
+                on_click=lambda: ui.run_javascript('window.open("/docs", "_blank")')
+            ).props("outline color=blue").classes("border-button")
+            ui.button(
+                "Docs", 
+                on_click=lambda: ui.run_javascript(f'window.open("{_DOCS_URL}", "_blank")')
+            ).props("outline color=blue").classes("border-button")
             ui.button(
                 _("logout"), on_click=_do_logout
             ).props("outline color=red").classes("border-button")
+            
+            """
+            
+            ui.button(
+                icon="menu", 
+                on_click=lambda: _drawer.toggle() if _drawer else None
+            ).props("outline color=grey").classes("border-button")
 
 
 def _make_drawer(_):
     """Shared left navigation drawer."""
-    with ui.left_drawer().classes("bg-[#1a1a1a]"):
+    global _drawer
+    with ui.left_drawer().classes("bg-[#1a1a1a]").props("bordered width=200") as _drawer:
         ui.item_label(_("navigation")).classes(
             "text-h6 text-bold q-mb-xs"
         ).style(f"color: {_YELLOW}")
@@ -249,6 +273,70 @@ def _make_drawer(_):
             ui.item(
                 label, on_click=lambda t=target: ui.navigate.to(t)
             ).style(f"color: {_NAV_COLOR}")
+        
+        ui.item(
+            _("API"), 
+            on_click=lambda: ui.run_javascript('window.open("/docs", "_blank")')
+        ).style("color: #2296f3;")
+
+        ui.item(
+            _("Docs"), 
+            on_click=lambda: ui.run_javascript(f'window.open("{_DOCS_URL}", "_blank")')
+        ).style("color: #2296f3;")
+
+        ui.item(
+            _("logout"), 
+            on_click=_do_logout
+        ).style("color: #f54336;")
+        
+
+def _make_footer(_):
+    """Shared footer for all pages."""
+    with ui.footer().classes("bg-[#040d12] items-center").style("border-top: 1px solid #0c2736;"):
+        with ui.row().classes("items-center gap-4 w-full justify-center"):
+            
+            with ui.row().classes("items-center gap-1"):
+                ui.html(
+                    f'<img src="/static/footer-logo.png" style="height: 20px; width: auto;">'
+                )
+                ui.html(
+                    f'<span style="color: #666; font-size: 0.85em;">'
+                    f'&copy; 2026 <a href="{_AUTUMO_URL}" target="_blank" '
+                    f'style="color: #666; text-decoration: none;">autumo GmbH</a>'
+                    f' &mdash; Licensed under MIT'
+                    f'</span>'
+                )
+            
+            ui.label("|").style("color: #444;")
+
+            ui.label("API").style("color: #565656; font-size: 0.85em; cursor: pointer;").on(
+                "click", lambda: ui.run_javascript('window.open("/docs", "_blank")')
+            ).on("mouseover", lambda e: e.sender.style("color: #444")).on(
+                "mouseout", lambda e: e.sender.style("color: #565656")
+            )
+
+            ui.label("|").style("color: #444;")
+            
+            ui.link(
+                "Docs", 
+                _DOCS_URL, 
+                new_tab=True
+            ).style("color: #666; font-size: 0.85em; text-decoration: none;")
+            
+            ui.label("|").style("color: #444;")
+            
+            ui.link(
+                "GitHub",
+                "https://github.com/autumo/webduck",
+                new_tab=True
+            ).style("color: #666; font-size: 0.85em; text-decoration: none;")
+
+            ui.label("|").style("color: #444;")
+            
+            username = nicegui_app.storage.user.get("username", "")
+            with ui.row().classes("items-center gap-1"):
+                ui.label(f"{_('username')}:").style("color: #666; font-size: 0.85em;")
+                ui.label(username).style(f"color: {_YELLOW_DARKER}; font-size: 0.85em;")
 
 
 def create_ui_pages():
@@ -277,63 +365,74 @@ def create_ui_pages():
         _apply_dark_theme()
         ui.page_title(f"WebDuck {_version} — Login")
 
-        with ui.card().classes("absolute-center").style(
-            f"background: {_BG_CARD}"
-        ):
-            with ui.row().classes("items-center gap-2"):
-                if _icon:
-                    ui.html(
-                        f'<img src="/static/{_icon}" alt="icon" '
-                        f'style="height:36px; vertical-align:middle;">'
-                    )
-                ui.label(f"WebDuck {_version}").classes(
-                    "text-h4 text-bold"
-                ).style(f"color: {_YELLOW}")
-
-            ui.space().classes("h-3")
-
-            username = ui.input(_("username")).classes("w-full")
-            password = ui.input(
-                _("password"), password=True
-            ).classes("w-full")
-
-            def handle_login():
-                if _auth.verify_user(username.value, password.value):
-                    token = _auth.create_jwt_token(username.value)
-                    nicegui_app.storage.user["token"] = token
-                    nicegui_app.storage.user["username"] = (
-                        username.value
-                    )
-                    ui.navigate.to("/")
-                else:
-                    ui.notify(
-                        _("invalid_credentials"), type="negative"
-                    )
-
-            ui.on("keydown.enter", handle_login)
-
-            ui.button(
-                _("login_button"), on_click=handle_login
-            ).classes("w-full")
-
-            ui.space().classes("h-3")
-
-            lang_options = {
-                code: get_language_name(code)
-                for code in get_supported_languages()
-            }
-
-            lang_select = ui.select(
-                lang_options,
-                value=saved_lang,
-                on_change=lambda e: (
-                    nicegui_app.storage.user.update(
-                        {"language": e.value}
+        with ui.column().classes("fixed-center items-center gap-6"):
+            
+            with ui.card().style(
+                f"background: {_BG_CARD}; padding: 20px 24px 20px 24px;"
+            ):
+                with ui.row().classes("items-center gap-2"):
+                    if _icon:
+                        ui.html(
+                            f'<img src="/static/{_icon}" alt="icon" '
+                            f'style="height:36px; vertical-align:middle;">'
+                        )
+                    ui.label(f"WebDuck {_version}").classes(
+                        "text-h4 text-bold"
+                    ).style(f"color: {_YELLOW}")
+    
+                ui.space().classes("h-3")
+    
+                username = ui.input(_("username")).classes("w-full")
+                password = ui.input(
+                    _("password"), password=True
+                ).classes("w-full")
+    
+                def handle_login():
+                    if _auth.verify_user(username.value, password.value):
+                        token = _auth.create_jwt_token(username.value)
+                        nicegui_app.storage.user["token"] = token
+                        nicegui_app.storage.user["username"] = (
+                            username.value
+                        )
+                        ui.navigate.to("/")
+                    else:
+                        ui.notify(
+                            _("invalid_credentials"), type="negative"
+                        )
+    
+                ui.on("keydown.enter", handle_login)
+    
+                ui.space().classes("h-3")
+    
+                ui.button(
+                    _("login_button"), on_click=handle_login
+                ).classes("w-full")
+    
+                ui.space().classes("h-3")
+    
+                lang_options = {
+                    code: get_language_name(code)
+                    for code in get_supported_languages()
+                }
+    
+                lang_select = ui.select(
+                    lang_options,
+                    value=saved_lang,
+                    on_change=lambda e: (
+                        nicegui_app.storage.user.update(
+                            {"language": e.value}
+                        ),
+                        ui.navigate.reload(),
                     ),
-                    ui.navigate.reload(),
-                ),
-            ).classes("w-full q-mt-sm").props(
-                "outlined dense"
+                ).classes("w-full q-mt-sm").props(
+                    "outlined dense menu-anchor='top left' menu-self='bottom left'"
+                )
+            
+            ui.html(
+                f'<span style="color: #777; font-size: 0.9em; text-align: center; white-space: nowrap;">'
+                f'powered by <a href="{_AUTUMO_URL}" target="_blank" '
+                f'style="color: #777; text-decoration: none;">'
+                f'autumo GmbH</a></span>'
             )
 
     # ── Dashboard ──────────────────────────────────────────────
@@ -349,11 +448,12 @@ def create_ui_pages():
 
         _make_header(_)
         _make_drawer(_)
-
+        _make_footer(_)
+        
         with ui.card().classes("w-full"):
             ui.label(_("dashboard_title")).classes(
                 "text-h5"
-            ).style(f"color: {_YELLOW}")
+            ).style(f"color: {_YELLOW_LIGHT}")
 
             projects = _storage.list_projects()
             total_databases = sum(
@@ -398,18 +498,19 @@ def create_ui_pages():
 
         _make_header(_)
         _make_drawer(_)
+        _make_footer(_)
 
         # ── Page title ─────────────────────────────────────
         with ui.card().classes("w-full").style("margin-top: 4px"):
             ui.label(_("projects_title")).classes(
                 "text-h5"
-            ).style(f"color: {_YELLOW}")
+            ).style(f"color: {_YELLOW_LIGHT}")
 
         # ── Create project (own card) ──────────────────────
         with ui.card().classes("w-full q-mt-sm"):
             ui.label(_("create_project")).classes(
                 "text-subtitle1 text-bold q-mb-sm"
-            ).style(f"color: {_YELLOW_LIGHT}")
+            ).style(f"color: {_YELLOW}")
             with ui.row().classes("w-full items-center gap-4"):
                 project_name = ui.input(
                     _("project_name")
@@ -485,7 +586,7 @@ def create_ui_pages():
                         ):
                             ui.label(_("databases")).classes(
                                 "text-caption text-bold q-mb-xs"
-                            ).style(f"color: {_YELLOW_DARK}")
+                            )
                             for db_name in dbs:
                                 with ui.row().classes(
                                     "w-full items-center gap-2"
@@ -533,7 +634,7 @@ def create_ui_pages():
                     ):
                         ui.label(_("create_database")).classes(
                             "text-caption text-bold"
-                        ).style(f"color: {_YELLOW_DARK}")
+                        )
                         with ui.row().classes(
                             "w-full items-center gap-4"
                         ):
@@ -581,12 +682,13 @@ def create_ui_pages():
 
         _make_header(_)
         _make_drawer(_)
-
+        _make_footer(_)
+        
         # ── Card 1: Project & DB Selection (shared) ────────────
         with ui.card().classes("w-full"):
             ui.label(_("select_database")).classes(
                 "text-h5"
-            ).style(f"color: {_YELLOW}")
+            ).style(f"color: {_YELLOW_LIGHT}")
 
             with ui.row().classes("w-full gap-4"):
                 projects = _storage.list_projects()
@@ -618,11 +720,9 @@ def create_ui_pages():
         with ui.card().classes("w-full q-mt-sm"):
             ui.label(_("sql_queries")).classes(
                 "text-h5"
-            ).style(f"color: {_YELLOW}")
+            ).style(f"color: {_YELLOW_LIGHT}")
 
-            ui.label("SQL").classes("text-caption text-bold q-mb-xs").style(
-                f"color: {_YELLOW_LIGHT}"
-            )
+            ui.label("SQL").classes("text-caption text-bold q-mb-xs")
             sql_input = ui.textarea(
                 placeholder="SELECT * FROM table_name",
             ).classes("w-full")
@@ -698,7 +798,7 @@ def create_ui_pages():
                             key = "row_returned" if rc == 1 else "rows_returned"
                             ui.label(_(key) % rc).classes(
                                 "text-caption q-mt-sm"
-                            ).style(f"color: {_TEXT_DIM}")
+                            )
                         elif kind == "text":
                             ui.label(data).style(f"color: {_TEXT_DIM}")
                         else:
@@ -715,7 +815,7 @@ def create_ui_pages():
         with ui.card().classes("w-full q-mt-sm"):
             ui.label(_("sql_upload")).classes(
                 "text-h5"
-            ).style(f"color: {_YELLOW}")
+            ).style(f"color: {_YELLOW_LIGHT}")
 
             dsf = _("drop_sql_file")
             drop_html = f"""
