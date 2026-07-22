@@ -271,9 +271,6 @@ msgstr "%d Anweisung erfolgreich ausgeführt"
 msgid "statements_executed"
 msgstr "%d Anweisungen erfolgreich ausgeführt"
 
-msgid "no_file_loaded"
-msgstr "Keine SQL-Datei geladen"
-
 # Browse
 msgid "browse"
 msgstr "Durchsuchen"

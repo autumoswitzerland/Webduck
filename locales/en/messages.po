@@ -271,9 +271,6 @@ msgstr "%d statement executed successfully"
 msgid "statements_executed"
 msgstr "%d statements executed successfully"
 
-msgid "no_file_loaded"
-msgstr "No SQL file loaded"
-
 # Browse
 msgid "browse"
 msgstr "Browse"

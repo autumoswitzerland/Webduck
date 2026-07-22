@@ -1082,10 +1082,6 @@ def create_ui_pages():
             """
             ui.run_javascript(js_setup)
 
-            sql_upload_input = ui.textarea(
-                placeholder=_("no_file_loaded"),
-            ).classes("w-full").style("min-height: 150px;")
-
             upload_result_area = ui.card().classes("w-full mt-4 shadow-none")
 
             async def execute_upload():
@@ -1096,7 +1092,7 @@ def create_ui_pages():
                     'window._sqlUploadContent || ""',
                     timeout=3,
                 )
-                sql_text = js_result or sql_upload_input.value
+                sql_text = js_result
                 if not sql_text:
                     return
 
@@ -1136,7 +1132,6 @@ def create_ui_pages():
                         ui.label(_(key) % success_count).style(
                             "color: #66BB6A"
                         )
-                        sql_upload_input.value = ""
                         await ui.run_javascript(
                             """
                             window._sqlUploadContent = "";
@@ -1238,7 +1233,7 @@ def create_ui_pages():
                     ("sequences", "pin",
                      f"SELECT sequence_name AS table_name FROM duckdb_sequences() WHERE database_name = '{db}' ORDER BY sequence_name"),
                     ("macros", "settings",
-                     f"SELECT macro_name AS table_name FROM duckdb_macros() WHERE database_name = '{db}' ORDER BY macro_name"),
+                     f"SELECT function_name AS table_name FROM duckdb_functions() WHERE database_name = '{db}' AND function_type = 'macro' ORDER BY function_name"),
                 ]:
                     res = _storage.execute_query(proj, db, query)
                     items = []
@@ -1285,11 +1280,11 @@ def create_ui_pages():
                         if obj_type in ("tables", "views"):
                             q = f'SELECT * FROM "{name}" LIMIT 100'
                         elif obj_type == "indexes":
-                            q = f"SELECT * FROM duckdb_indexes() WHERE index_name = '{name}'"
+                            q = f"SELECT schema_name, index_name, table_name, is_unique, is_primary, expressions, sql FROM duckdb_indexes() WHERE index_name = '{name}'"
                         elif obj_type == "sequences":
-                            q = f"SELECT * FROM duckdb_sequences() WHERE sequence_name = '{name}'"
+                            q = f"SELECT schema_name, sequence_name, start_value, min_value, max_value, increment_by, cycle, last_value, sql FROM duckdb_sequences() WHERE sequence_name = '{name}'"
                         elif obj_type == "macros":
-                            q = f"SELECT * FROM duckdb_macros() WHERE macro_name = '{name}'"
+                            q = f"SELECT schema_name, function_name, function_type, return_type, parameters, parameter_types, macro_definition FROM duckdb_functions() WHERE function_name = '{name}' AND function_type = 'macro'"
                         else:
                             ui.label(_("error")).style(
                                 f"color: {_TEXT_DIM}"
@@ -1336,8 +1331,8 @@ def create_ui_pages():
                     f"color: {_TEXT_SOFT}; font-size: 0.85em;"
                 ).classes("q-tree--dense")
 
-        project_select.on("change", load_tree)
-        database_select.on("change", load_tree)
+        project_select.on_value_change(load_tree)
+        database_select.on_value_change(load_tree)
         load_tree()
 
 
