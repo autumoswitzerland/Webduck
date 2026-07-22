@@ -40,7 +40,7 @@ from nicegui import ui
 
 from webduck.api import admin as admin_api
 from webduck.api import db as db_api
-from webduck.auth.manager import AuthManager
+from webduck.auth.manager import AuthManager, ProjectAuth
 from webduck.config import WebDuckConfig, load_config
 from webduck.storage.engine import StorageEngine
 
@@ -48,6 +48,7 @@ from webduck.storage.engine import StorageEngine
 _config: WebDuckConfig | None = None
 _storage: StorageEngine | None = None
 _auth: AuthManager | None = None
+_project_auth: ProjectAuth | None = None
 _version: str = ""
 _icon: str = ""
 _drawer = None
@@ -69,13 +70,16 @@ _BG_CARD = "#1E1E1E"
 _BORDER = "#333333"
 _BORDER_BTN = "#2a2a2a"
 _NAV_COLOR = "#BBBBBB"
+_TREE_WIDTH = "20%"
 
 _DARK_CSS = f"""
 <style>
 body {{
     background: {_BG_DARK} !important;
     color: {_TEXT_SOFT} !important;
-    zoom: 1.1;
+}}
+html {{
+    font-size: 110%;
 }}
 * {{
     box-shadow: none !important;
@@ -103,6 +107,12 @@ body {{
 .q-field__native::placeholder {{
     color: #777 !important;
     opacity: 1 !important;
+}}
+.q-field__control {{
+    background: #1a1a1a !important;
+}}
+.q-menu {{
+    background: #333 !important;
 }}
 .q-table {{
     color: {_TEXT_SOFT} !important;
@@ -152,12 +162,19 @@ body {{
     border-color: #333333 !important;
     background-color: #282828 !important;
 }}
+.q-tooltip {{
+    background: #1a1a1a !important;
+    color: #c0c0c0 !important;
+    font-size: 0.85rem !important;
+    border: 1px solid #333 !important;
+    border-radius: 6px !important;
+}}
 </style>
 """
 
 def setup_app(config: WebDuckConfig) -> FastAPI:
     """Set up FastAPI app with NiceGUI integration."""
-    global _config, _storage, _auth, _version, _icon
+    global _config, _storage, _auth, _project_auth, _version, _icon
 
     _config = config
     _version = config.version
@@ -170,6 +187,7 @@ def setup_app(config: WebDuckConfig) -> FastAPI:
         config.auth.jwt_secret,
         config.auth.jwt_algorithm,
     )
+    _project_auth = ProjectAuth(config.server.data_dir)
 
     fastapi_app = FastAPI(
         title="WebDuck",
@@ -265,42 +283,52 @@ def _make_drawer(_):
         ui.item_label(_("navigation")).classes(
             "text-h6 text-bold q-mb-xs"
         ).style(f"color: {_YELLOW}")
-        for label, target in [
-            (_("dashboard"), "/"),
-            (_("projects"), "/projects"),
-            (_("sql_editor"), "/query"),
+        for label, target, icon in [
+            (_("dashboard"), "/", "dashboard"),
+            (_("projects"), "/projects", "folder_open"),
+            (_("browse"), "/browse", "account_tree"),
+            (_("sql_editor"), "/query", "code"),
         ]:
-            ui.item(
-                label, on_click=lambda t=target: ui.navigate.to(t)
-            ).style(f"color: {_NAV_COLOR}")
-        
-        ui.item(
-            _("API"), 
+            with ui.item(
+                on_click=lambda t=target: ui.navigate.to(t)
+            ).style(f"color: {_NAV_COLOR}").props("clickable"):
+                with ui.item_section().props("side"):
+                    ui.icon(icon).style(f"color: {_NAV_COLOR}")
+                ui.item_section(label)
+
+        with ui.item(
             on_click=lambda: ui.run_javascript('window.open("/docs", "_blank")')
-        ).style("color: #2296f3;")
+        ).style("color: #2296f3;").props("clickable"):
+            with ui.item_section().props("side"):
+                ui.icon("api").style("color: #2296f3;")
+            ui.item_section("API")
 
-        ui.item(
-            _("Docs"), 
+        with ui.item(
             on_click=lambda: ui.run_javascript(f'window.open("{_DOCS_URL}", "_blank")')
-        ).style("color: #2296f3;")
+        ).style("color: #2296f3;").props("clickable"):
+            with ui.item_section().props("side"):
+                ui.icon("menu_book").style("color: #2296f3;")
+            ui.item_section("Docs")
 
-        ui.item(
-            _("logout"), 
+        with ui.item(
             on_click=_do_logout
-        ).style("color: #f54336;")
+        ).style("color: #f54336;").props("clickable"):
+            with ui.item_section().props("side"):
+                ui.icon("logout").style("color: #f54336;")
+            ui.item_section(_("logout"))
         
 
 def _make_footer(_):
     """Shared footer for all pages."""
-    with ui.footer().classes("bg-[#040d12] items-center").style("border-top: 1px solid #0c2736;"):
+    with ui.footer().classes("bg-[#040d12] items-center").style("border-top: 0.9px solid #0c2736;"):
         with ui.row().classes("items-center gap-4 w-full justify-center"):
             
             with ui.row().classes("items-center gap-1"):
                 ui.html(
-                    f'<img src="/static/footer-logo.png" style="height: 20px; width: auto;">'
+                    f'<img src="/static/footer-logo.png" style="height: 16px; width: auto; filter: brightness(0.65);">'
                 )
                 ui.html(
-                    f'<span style="color: #666; font-size: 0.85em;">'
+                    f'<span style="color: #666; font-size: 0.9em;">'
                     f'&copy; 2026 <a href="{_AUTUMO_URL}" target="_blank" '
                     f'style="color: #666; text-decoration: none;">autumo GmbH</a>'
                     f' &mdash; Licensed under MIT'
@@ -309,34 +337,34 @@ def _make_footer(_):
             
             ui.label("|").style("color: #444;")
 
-            ui.label("API").style("color: #565656; font-size: 0.85em; cursor: pointer;").on(
+            ui.label("API").style("color: #565656; font-size: 0.9em; cursor: pointer;").on(
                 "click", lambda: ui.run_javascript('window.open("/docs", "_blank")')
             ).on("mouseover", lambda e: e.sender.style("color: #444")).on(
                 "mouseout", lambda e: e.sender.style("color: #565656")
             )
 
-            ui.label("|").style("color: #444;")
+            ui.label("|").style("font-size: 0.9em; color: #444;")
             
             ui.link(
                 "Docs", 
                 _DOCS_URL, 
                 new_tab=True
-            ).style("color: #666; font-size: 0.85em; text-decoration: none;")
+            ).style("color: #666; font-size: 0.9em; text-decoration: none;")
             
-            ui.label("|").style("color: #444;")
+            ui.label("|").style("font-size: 0.9em; color: #444;")
             
             ui.link(
                 "GitHub",
                 "https://github.com/autumo/webduck",
                 new_tab=True
-            ).style("color: #666; font-size: 0.85em; text-decoration: none;")
+            ).style("color: #666; font-size: 0.9em; text-decoration: none;")
 
-            ui.label("|").style("color: #444;")
+            ui.label("|").style("font-size: 0.9em; color: #444;")
             
             username = nicegui_app.storage.user.get("username", "")
             with ui.row().classes("items-center gap-1"):
-                ui.label(f"{_('username')}:").style("color: #666; font-size: 0.85em;")
-                ui.label(username).style(f"color: {_YELLOW_DARKER}; font-size: 0.85em;")
+                ui.label(f"{_('username')}:").style("color: #666; font-size: 0.9em;")
+                ui.label(username).style(f"color: {_YELLOW_DARKER}; font-size: 0.9em;")
 
 
 def create_ui_pages():
@@ -425,7 +453,7 @@ def create_ui_pages():
                         ui.navigate.reload(),
                     ),
                 ).classes("w-full q-mt-sm").props(
-                    "outlined dense menu-anchor='top left' menu-self='bottom left'"
+                    "outlined dense"
                 )
             
             ui.html(
@@ -558,17 +586,44 @@ def create_ui_pages():
                         ).classes("text-caption")
 
                         async def delete_project(p=project):
-                            if _storage.delete_project(p):
-                                ui.notify(
-                                    _("success"),
-                                    type="positive",
+                            with ui.dialog() as dlg, ui.card().classes(
+                                "items-center gap-4"
+                            ).style(
+                                "background: #1E1E1E; border-radius: 12px; "
+                                "padding: 24px 32px;"
+                            ):
+                                ui.label(_("confirm_delete_project")).style(
+                                    f"color: {_TEXT_SOFT}"
                                 )
-                                ui.navigate.reload()
-                            else:
-                                ui.notify(
-                                    _("error"),
-                                    type="negative",
-                                )
+                                with ui.row().classes("gap-2"):
+                                    ui.button(
+                                        _("cancel"),
+                                        on_click=dlg.close,
+                                    ).props("outline color=grey").classes(
+                                        "border-button"
+                                    )
+
+                                    def do_delete():
+                                        dlg.close()
+                                        if _storage.delete_project(p):
+                                            ui.notify(
+                                                _("success"),
+                                                type="positive",
+                                            )
+                                            ui.navigate.reload()
+                                        else:
+                                            ui.notify(
+                                                _("error"),
+                                                type="negative",
+                                            )
+
+                                    ui.button(
+                                        _("delete"),
+                                        on_click=do_delete,
+                                    ).props("outline color=red").classes(
+                                        "border-button"
+                                    )
+                            dlg.open()
 
                         ui.button(
                             _("delete"),
@@ -601,23 +656,125 @@ def create_ui_pages():
                                         '<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>'
                                     )
                                     ui.label(db_name).classes("text-body2")
+                                    _pa = _project_auth or ProjectAuth(_storage.data_dir)
+                                    has_pw = _pa.has_database_password(
+                                        project, db_name
+                                    )
+                                    if has_pw:
+                                        ui.html(
+                                            '<svg width="14" height="14" viewBox="0 0 24 24" '
+                                            'fill="none" stroke="#FFD54F" stroke-width="2" '
+                                            'stroke-linecap="round" stroke-linejoin="round" '
+                                            'style="vertical-align: middle;">'
+                                            '<rect x="3" y="11" width="18" height="11" '
+                                            'rx="2" ry="2"/>'
+                                            '<path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+                                        ).tooltip(_("password_set")).props(
+                                            "tooltip-position=top"
+                                        )
                                     ui.space()
+
+                                    async def change_db_password(
+                                        p=project, d=db_name
+                                    ):
+                                        with ui.dialog() as dlg, ui.card().classes(
+                                            "items-center gap-4"
+                                        ).style(
+                                            "background: #1E1E1E; border-radius: 12px; "
+                                            "padding: 24px 32px;"
+                                        ):
+                                            ui.label(
+                                                f"{_('api_password')} — {d}"
+                                            ).style(f"color: {_YELLOW}")
+                                            pw_input = ui.input(
+                                                password=True,
+                                                password_toggle_button=True,
+                                            ).classes("w-full").props(
+                                                "autocomplete=new-password"
+                                            )
+
+                                            def do_save():
+                                                if pw_input.value:
+                                                    pa = _project_auth or ProjectAuth(
+                                                        _storage.data_dir
+                                                    )
+                                                    pa.set_database_password(
+                                                        p, d, pw_input.value,
+                                                    )
+                                                    dlg.close()
+                                                    ui.notify(
+                                                        _("success"),
+                                                        type="positive",
+                                                    )
+                                                    ui.navigate.reload()
+
+                                            with ui.row().classes("gap-2"):
+                                                ui.button(
+                                                    _("generate_password"),
+                                                    on_click=lambda: setattr(
+                                                        pw_input, 'value',
+                                                        secrets.token_urlsafe(16),
+                                                    ),
+                                                ).props("outline color=amber").classes(
+                                                    "border-button"
+                                                )
+                                                ui.button(
+                                                    _("save"),
+                                                    on_click=do_save,
+                                                ).props("outline color=green").classes(
+                                                    "border-button"
+                                                )
+                                        dlg.open()
+
+                                    ui.button(
+                                        on_click=change_db_password,
+                                    ).props(
+                                        'icon="key" flat dense'
+                                    ).style("color: #888;").tooltip(
+                                        _("change_password")
+                                    ).props("tooltip-position=top")
+
                                     async def delete_db(
                                         p=project, d=db_name
                                     ):
-                                        if _storage.delete_database(
-                                            p, d
+                                        with ui.dialog() as dlg, ui.card().classes(
+                                            "items-center gap-4"
+                                        ).style(
+                                            "background: #1E1E1E; border-radius: 12px; "
+                                            "padding: 24px 32px;"
                                         ):
-                                            ui.notify(
-                                                _("success"),
-                                                type="positive",
+                                            ui.label(_("confirm_delete_database")).style(
+                                                f"color: {_TEXT_SOFT}"
                                             )
-                                            ui.navigate.reload()
-                                        else:
-                                            ui.notify(
-                                                _("error"),
-                                                type="negative",
-                                            )
+                                            with ui.row().classes("gap-2"):
+                                                ui.button(
+                                                    _("cancel"),
+                                                    on_click=dlg.close,
+                                                ).props("outline color=grey").classes(
+                                                    "border-button"
+                                                )
+
+                                                def do_delete():
+                                                    dlg.close()
+                                                    if _storage.delete_database(p, d):
+                                                        ui.notify(
+                                                            _("success"),
+                                                            type="positive",
+                                                        )
+                                                        ui.navigate.reload()
+                                                    else:
+                                                        ui.notify(
+                                                            _("error"),
+                                                            type="negative",
+                                                        )
+
+                                                ui.button(
+                                                    _("delete"),
+                                                    on_click=do_delete,
+                                                ).props("outline color=red").classes(
+                                                    "border-button"
+                                                )
+                                        dlg.open()
                                     ui.button(
                                         _("delete"),
                                         on_click=delete_db,
@@ -642,12 +799,39 @@ def create_ui_pages():
                                 _("database_name")
                             ).classes("flex-grow")
 
-                            async def create_db(p=project):
-                                if new_db_name.value:
+                            new_db_password = ui.input(
+                                f"{_('api_password')} ({_('optional')})",
+                                password=True,
+                                password_toggle_button=True,
+                            ).classes("flex-grow").props('autocomplete="new-password"')
+
+                            def generate_db_password(pw=new_db_password):
+                                pw.value = secrets.token_urlsafe(16)
+
+                            ui.button(
+                                on_click=generate_db_password,
+                            ).props(
+                                'icon="casino" flat dense'
+                            ).tooltip(_("generate_password")).props(
+                                "tooltip-position=top"
+                            )
+
+                            async def create_db(
+                                p=project,
+                                db_name=new_db_name,
+                                db_password=new_db_password,
+                            ):
+                                if db_name.value:
                                     ok = _storage.create_database(
-                                        p, new_db_name.value
+                                        p, db_name.value
                                     )
                                     if ok:
+                                        if db_password.value:
+                                            pa = _project_auth or ProjectAuth(_storage.data_dir)
+                                            pa.set_database_password(
+                                                p, db_name.value,
+                                                db_password.value,
+                                            )
                                         ui.notify(
                                             _("success"),
                                             type="positive",
@@ -708,12 +892,14 @@ def create_ui_pages():
                         databases = _storage.list_databases(
                             project_select.value
                         )
-                        database_select.options = databases
-                        database_select.value = (
-                            databases[0] if databases else None
+                        database_select.set_options(
+                            databases,
+                            value=databases[0] if databases else None,
                         )
+                    else:
+                        database_select.set_options([], value=None)
 
-                project_select.on("change", update_databases)
+                project_select.on_value_change(update_databases)
                 update_databases()
 
         # ── Card 2: SQL Queries ────────────────────────────────
@@ -969,6 +1155,190 @@ def create_ui_pages():
             ui.button(
                 _("execute_upload"), on_click=execute_upload
             ).props("outline color=amber").classes("mt-2 border-button")
+
+    # ── Browse ────────────────────────────────────────────────
+    @ui.page("/browse")
+    def browse_page():
+        _ = get_user_translator()
+        _apply_dark_theme()
+        ui.page_title(f"WebDuck {_version} — Browse")
+
+        if "token" not in nicegui_app.storage.user:
+            ui.navigate.to("/login")
+            return
+
+        _make_header(_)
+        _make_drawer(_)
+        _make_footer(_)
+
+        with ui.card().classes("w-full"):
+            ui.label(_("browse")).classes("text-h5").style(
+                f"color: {_YELLOW_LIGHT}"
+            )
+
+            with ui.row().classes("w-full gap-4"):
+                projects = _storage.list_projects()
+                default_proj = projects[0] if projects else None
+                project_select = ui.select(
+                    projects,
+                    label=_("projects"),
+                    value=default_proj,
+                ).classes("w-40")
+
+                database_select = ui.select(
+                    [], label=_("databases")
+                ).classes("w-40")
+
+                def update_databases():
+                    if project_select.value:
+                        databases = _storage.list_databases(
+                            project_select.value
+                        )
+                        database_select.set_options(
+                            databases,
+                            value=databases[0] if databases else None,
+                        )
+                    else:
+                        database_select.set_options([], value=None)
+
+                project_select.on_value_change(update_databases)
+                update_databases()
+
+        # ── Tree + Result ──────────────────────────────────────
+        with ui.row().classes("w-full q-mt-sm gap-4"):
+            tree_container = ui.card().classes(
+                "col"
+            ).style(f"min-height: 200px; flex: 0 0 {_TREE_WIDTH};")
+
+            result_container = ui.card().classes("col")
+
+        def load_tree():
+            tree_container.clear()
+            result_container.clear()
+
+            proj = project_select.value
+            db = database_select.value
+            if not proj or not db:
+                return
+
+            with tree_container:
+                ui.label(_("database_objects")).classes(
+                    "text-h6 q-mb-sm"
+                ).style(f"color: {_YELLOW}")
+
+                tree_data = {}
+
+                for obj_type, icon, query in [
+                    ("tables", "table_chart",
+                     f"SELECT table_name FROM duckdb_tables() WHERE database_name = '{db}' ORDER BY table_name"),
+                    ("views", "visibility",
+                     f"SELECT view_name AS table_name FROM duckdb_views() WHERE database_name = '{db}' ORDER BY view_name"),
+                    ("indexes", "tag",
+                     f"SELECT index_name AS table_name FROM duckdb_indexes() WHERE database_name = '{db}' ORDER BY index_name"),
+                    ("sequences", "pin",
+                     f"SELECT sequence_name AS table_name FROM duckdb_sequences() WHERE database_name = '{db}' ORDER BY sequence_name"),
+                    ("macros", "settings",
+                     f"SELECT macro_name AS table_name FROM duckdb_macros() WHERE database_name = '{db}' ORDER BY macro_name"),
+                ]:
+                    res = _storage.execute_query(proj, db, query)
+                    items = []
+                    if res.get("success") and res.get("rows"):
+                        for row in res["rows"]:
+                            name = row[0]
+                            items.append({
+                                "id": f"{obj_type}/{name}",
+                                "label": name,
+                                "icon": icon,
+                            })
+
+                    if items:
+                        tree_data[obj_type] = {
+                            "id": obj_type,
+                            "label": _(obj_type),
+                            "icon": "folder",
+                            "children": items,
+                        }
+
+                if not tree_data:
+                    ui.label(_("no_data_found")).style(
+                        f"color: {_TEXT_DIM}"
+                    )
+                    return
+
+                def on_tree_click(e):
+                    selected = e.value if isinstance(e.value, list) else [e.value]
+                    if not selected:
+                        return
+                    node_id = selected[0]
+                    if "/" not in node_id:
+                        return
+                    obj_type, name = node_id.split("/", 1)
+                    result_container.clear()
+
+                    with result_container:
+                        ui.label(
+                            f"{obj_type}: {name}"
+                        ).classes("text-h6 q-mb-sm").style(
+                            f"color: {_YELLOW}"
+                        )
+
+                        if obj_type in ("tables", "views"):
+                            q = f'SELECT * FROM "{name}" LIMIT 100'
+                        elif obj_type == "indexes":
+                            q = f"SELECT * FROM duckdb_indexes() WHERE index_name = '{name}'"
+                        elif obj_type == "sequences":
+                            q = f"SELECT * FROM duckdb_sequences() WHERE sequence_name = '{name}'"
+                        elif obj_type == "macros":
+                            q = f"SELECT * FROM duckdb_macros() WHERE macro_name = '{name}'"
+                        else:
+                            ui.label(_("error")).style(
+                                f"color: {_TEXT_DIM}"
+                            )
+                            return
+
+                        res = _storage.execute_query(
+                            project_select.value,
+                            database_select.value,
+                            q,
+                        )
+                        if not res.get("success"):
+                            ui.label(res.get("error", "")).style(
+                                f"color: #f44336"
+                            )
+                            return
+
+                        columns = res.get("columns", [])
+                        rows_raw = res.get("rows", [])
+
+                        if not columns:
+                            ui.label(_("no_data_found")).style(
+                                f"color: {_TEXT_DIM}"
+                            )
+                            return
+
+                        rows = [
+                            dict(zip(columns, row)) for row in rows_raw
+                        ]
+
+                        table = ui.table(
+                            columns=[
+                                {"name": c, "label": c, "field": c}
+                                for c in columns
+                            ],
+                            rows=rows,
+                            row_key=columns[0] if columns else None,
+                        ).classes("w-full").props("flat bordered")
+
+                ui.tree(
+                    list(tree_data.values()),
+                    on_select=on_tree_click,
+                ).style(
+                    f"color: {_TEXT_SOFT}; font-size: 0.85em;"
+                ).classes("q-tree--dense")
+
+        project_select.on("change", load_tree)
+        database_select.on("change", load_tree)
+        load_tree()
 
 
 # --- CLI ---

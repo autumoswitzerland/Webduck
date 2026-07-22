@@ -100,6 +100,21 @@ msgstr "Create Database"
 msgid "database_name"
 msgstr "Database Name"
 
+msgid "api_password"
+msgstr "API Password"
+
+msgid "optional"
+msgstr "optional"
+
+msgid "generate_password"
+msgstr "Generate Password"
+
+msgid "password_set"
+msgstr "Password set"
+
+msgid "change_password"
+msgstr "Change Password"
+
 msgid "delete_database"
 msgstr "Delete Database"
 
@@ -258,3 +273,25 @@ msgstr "%d statements executed successfully"
 
 msgid "no_file_loaded"
 msgstr "No SQL file loaded"
+
+# Browse
+msgid "browse"
+msgstr "Browse"
+
+msgid "database_objects"
+msgstr "Objects"
+
+msgid "views"
+msgstr "Views"
+
+msgid "indexes"
+msgstr "Indexes"
+
+msgid "sequences"
+msgstr "Sequences"
+
+msgid "macros"
+msgstr "Macros"
+
+msgid "no_data_found"
+msgstr "No data found"

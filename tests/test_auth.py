@@ -76,4 +76,4 @@ class TestProjectAuth:
         assert project_auth.has_database_access("proj", "db1", "secret", "write") is False
 
     def test_nonexistent_project(self, project_auth):
-        assert project_auth.has_database_access("nope", "nope", "pass", "read") is False
+        assert project_auth.has_database_access("nope", "nope", "pass", "read") is True

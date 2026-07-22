@@ -100,6 +100,21 @@ msgstr "Datenbank erstellen"
 msgid "database_name"
 msgstr "Datenbankname"
 
+msgid "api_password"
+msgstr "API-Passwort"
+
+msgid "optional"
+msgstr "optional"
+
+msgid "generate_password"
+msgstr "Passwort generieren"
+
+msgid "password_set"
+msgstr "Passwort gesetzt"
+
+msgid "change_password"
+msgstr "Passwort ändern"
+
 msgid "delete_database"
 msgstr "Datenbank löschen"
 
@@ -258,3 +273,25 @@ msgstr "%d Anweisungen erfolgreich ausgeführt"
 
 msgid "no_file_loaded"
 msgstr "Keine SQL-Datei geladen"
+
+# Browse
+msgid "browse"
+msgstr "Durchsuchen"
+
+msgid "database_objects"
+msgstr "Objekte"
+
+msgid "views"
+msgstr "Views"
+
+msgid "indexes"
+msgstr "Indizes"
+
+msgid "sequences"
+msgstr "Sequenzen"
+
+msgid "macros"
+msgstr "Makros"
+
+msgid "no_data_found"
+msgstr "Keine Daten gefunden"

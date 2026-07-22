@@ -56,22 +56,26 @@ class StorageEngine:
         """List all projects in the data directory."""
         if not self.data_dir.exists():
             return []
-        return [
+        projects = [
             d.name
             for d in self.data_dir.iterdir()
             if d.is_dir() and not d.name.startswith(".")
         ]
+        projects.sort()
+        return projects
 
     def list_databases(self, project: str) -> list[str]:
         """List all databases in a project."""
         project_dir = self.data_dir / project
         if not project_dir.exists():
             return []
-        return [
+        databases = [
             f.stem
             for f in project_dir.glob("*.duckdb")
             if f.is_file()
         ]
+        databases.sort()
+        return databases
 
     def database_exists(self, project: str, database: str) -> bool:
         """Check if a database exists."""

@@ -58,11 +58,23 @@ def set_dependencies(storage: StorageEngine) -> None:
 def verify_project_key(
     project: str,
     database: str,
-    x_project_key: str = Header(..., description="Format: project:password"),
-) -> str:
-    """Verify project key and return password."""
+    x_project_key: str | None = Header(None, description="Format: project:password"),
+) -> str | None:
+    """Verify project key and return password. Optional if no password is set."""
     if not project_auth:
         raise HTTPException(status_code=500, detail="Project auth not initialized")
+
+    if not project_auth.has_database_password(project, database):
+        return None
+
+    if not x_project_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=(
+                "This database requires authentication. "
+                "Use X-Project-Key header (format: project:password)"
+            ),
+        )
 
     try:
         _, password = x_project_key.split(":", 1)

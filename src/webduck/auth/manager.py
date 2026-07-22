@@ -150,12 +150,14 @@ class ProjectAuth:
     def verify_database_password(
         self, project: str, database: str, password: str, access_level: str = "read"
     ) -> bool:
-        """Verify database password."""
+        """Verify database password. No password set = open access."""
         config = self.get_project_config(project)
         db_config = config.get("databases", {}).get(database, {})
         password_hash = db_config.get(f"{access_level}_password_hash")
 
         if not password_hash:
+            if not self.has_database_password(project, database):
+                return True
             return False
 
         return bcrypt.checkpw(password.encode(), password_hash.encode())
@@ -170,3 +172,9 @@ class ProjectAuth:
         if access_level == "read":
             return self.verify_database_password(project, database, password, "write")
         return False
+
+    def has_database_password(self, project: str, database: str) -> bool:
+        """Check if a password is set for a database."""
+        config = self.get_project_config(project)
+        db_config = config.get("databases", {}).get(database, {})
+        return bool(db_config.get("read_password_hash") or db_config.get("write_password_hash"))

@@ -56,13 +56,15 @@ class TestQuery:
         assert data["success"] is False
 
     def test_query_nonexistent_db(self, fastapi_client, setup_db):
-        # verify_project_key runs first; nonexistent db returns 401
+        # No password set for "nope" → open access, storage returns error
         resp = fastapi_client.post(
             "/db/projects/myproj/databases/nope/query",
             json={"sql": "SELECT 1"},
             headers=setup_db,
         )
-        assert resp.status_code == 401
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
 
 
 class TestWrite:
@@ -85,12 +87,15 @@ class TestWrite:
 
 
 class TestUnauthorized:
-    def test_no_project_key(self, fastapi_client):
+    def test_no_project_key_no_password(self, fastapi_client):
+        # No password set → open access without header
         resp = fastapi_client.post(
             "/db/projects/myproj/databases/db1/query",
             json={"sql": "SELECT 1"},
         )
-        assert resp.status_code == 422  # Missing required header
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False  # DB doesn't exist
 
     def test_wrong_password(self, fastapi_client, auth_token):
         h = {"Authorization": f"Bearer {auth_token}"}
@@ -105,6 +110,21 @@ class TestUnauthorized:
             "/db/projects/p/databases/d/query",
             json={"sql": "SELECT 1"},
             headers={"X-Project-Key": "p:wrong"},
+        )
+        assert resp.status_code == 401
+
+    def test_password_set_no_header(self, fastapi_client, auth_token):
+        h = {"Authorization": f"Bearer {auth_token}"}
+        fastapi_client.post("/admin/projects", json={"name": "p2"}, headers=h)
+        fastapi_client.post("/admin/projects/p2/databases", json={"name": "d2"}, headers=h)
+        fastapi_client.put(
+            "/admin/projects/p2/databases/d2/password",
+            json={"password": "secret", "access_level": "write"},
+            headers=h,
+        )
+        resp = fastapi_client.post(
+            "/db/projects/p2/databases/d2/query",
+            json={"sql": "SELECT 1"},
         )
         assert resp.status_code == 401
 
