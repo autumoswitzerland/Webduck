@@ -301,3 +301,9 @@ msgstr "All %d rows shown"
 
 msgid "total_rows"
 msgstr "%d rows"
+
+msgid "updated"
+msgstr "Updated"
+
+msgid "invalid_value"
+msgstr "Invalid value '%s' for type %s"

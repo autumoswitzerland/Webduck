@@ -27,6 +27,7 @@
 """WebDuck - Main application entry point."""
 
 import asyncio
+import json
 import secrets
 import sys
 from pathlib import Path
@@ -1262,11 +1263,15 @@ def create_ui_pages():
                     return
 
                 _browse_timer = [None]
+                _edit_timer = [None]
 
                 def on_tree_click(e):
                     if _browse_timer[0]:
                         _browse_timer[0].cancel()
                         _browse_timer[0] = None
+                    if _edit_timer[0]:
+                        _edit_timer[0].cancel()
+                        _edit_timer[0] = None
 
                     selected = e.value if isinstance(e.value, list) else [e.value]
                     if not selected:
@@ -1399,6 +1404,167 @@ def create_ui_pages():
                                     });
                                 }, 200);
                                 """)
+
+                            # ── Cell editing ──────────────────────
+                            type_res = _storage.execute_query(
+                                proj, db,
+                                "SELECT column_name, data_type "
+                                "FROM information_schema.columns "
+                                f"WHERE table_name = '{name}' "
+                                "AND table_schema = 'main'",
+                            )
+                            col_types = {}
+                            if type_res.get("success"):
+                                for row in type_res["rows"]:
+                                    col_types[row[0]] = row[1]
+
+                            _VALID_CAST = {
+                                "VARCHAR", "INTEGER", "BIGINT",
+                                "SMALLINT", "TINYINT", "DOUBLE",
+                                "FLOAT", "DECIMAL", "DATE",
+                                "TIMESTAMP", "BOOLEAN", "UUID",
+                            }
+
+                            ui.add_css("""
+                                .q-table tbody td:hover {
+                                    background: rgba(255,213,79,0.1) !important;
+                                    cursor: pointer;
+                                }
+                            """)
+
+                            pk_col = columns[0] if columns else None
+                            if pk_col and pk_col in col_types:
+                                ui.run_javascript("""
+                                setTimeout(function() {
+                                    var ts = document.querySelectorAll('.q-table');
+                                    var t = ts[ts.length - 1];
+                                    if (!t) return;
+                                    t.addEventListener('dblclick', function(e) {
+                                        var td = e.target.closest('td');
+                                        if (!td) return;
+                                        var tr = td.closest('tr');
+                                        if (!tr) return;
+                                        var ri = Array.from(
+                                            t.querySelectorAll('tbody tr')
+                                        ).indexOf(tr);
+                                        var hi = t.querySelectorAll('thead th');
+                                        var ci = Array.from(
+                                            tr.querySelectorAll('td')
+                                        ).indexOf(td);
+                                        var cn = hi[ci]
+                                            ? hi[ci].textContent.trim() : '';
+                                        var ov = td.textContent.trim();
+                                        window._eci = JSON.stringify(
+                                            {r:ri, c:cn, v:ov}
+                                        );
+                                    });
+                                }, 300);
+                                """)
+
+                                async def _check_edit():
+                                    info = await ui.run_javascript(
+                                        "window._eci || null", timeout=1,
+                                    )
+                                    if not info:
+                                        return
+                                    ui.run_javascript("window._eci = null")
+                                    d = json.loads(info)
+                                    ri, cn, ov = d["r"], d["c"], d["v"]
+                                    if cn not in col_types:
+                                        ui.notification(
+                                            "Unknown column",
+                                            type="warning",
+                                        )
+                                        return
+                                    ct = col_types[cn]
+                                    if ct not in _VALID_CAST:
+                                        ui.notification(
+                                            "Column type not editable",
+                                            type="warning",
+                                        )
+                                        return
+
+                                    with ui.dialog() as dlg, ui.card().style(
+                                        f"background: {_BG_CARD};"
+                                        " min-width: 320px;"
+                                    ):
+                                        ui.label(cn).style(
+                                            f"color: {_YELLOW}"
+                                        )
+                                        inp = ui.input(value=ov).classes(
+                                            "w-full"
+                                        )
+                                        with ui.row().classes(
+                                            "w-full gap-2 justify-end mt-2"
+                                        ):
+                                            ui.button(
+                                                _("cancel"),
+                                                on_click=dlg.close,
+                                            ).props("flat color=grey")
+
+                                            async def _save():
+                                                nv = inp.value
+                                                if nv == ov:
+                                                    dlg.close()
+                                                    return
+                                                # ── validate ──
+                                                import re as _re
+                                                _ok = True
+                                                if ct in ("INTEGER", "BIGINT", "SMALLINT", "TINYINT"):
+                                                    _ok = _re.fullmatch(r"-?\d+", nv) is not None
+                                                elif ct in ("DOUBLE", "FLOAT", "DECIMAL"):
+                                                    _ok = _re.fullmatch(r"-?\d+(\.\d+)?", nv) is not None
+                                                elif ct == "BOOLEAN":
+                                                    _ok = nv.lower() in ("true", "false", "1", "0")
+                                                elif ct == "DATE":
+                                                    _ok = _re.fullmatch(r"\d{4}-\d{2}-\d{2}", nv) is not None
+                                                elif ct == "TIMESTAMP":
+                                                    _ok = _re.fullmatch(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}", nv) is not None
+                                                if not _ok:
+                                                    ui.notification(
+                                                        _("invalid_value") % (nv, ct),
+                                                        type="warning",
+                                                    )
+                                                    return
+                                                sql = (
+                                                    f'UPDATE "{name}"'
+                                                    f' SET "{cn}" = CAST(?'
+                                                    f" AS {ct})"
+                                                    f' WHERE "{pk_col}" = ?'
+                                                )
+                                                pk_val = all_rows[ri][pk_col]
+                                                r = await asyncio.to_thread(
+                                                    _storage.execute_query,
+                                                    proj, db, sql,
+                                                    params=[nv, pk_val],
+                                                    read_only=False,
+                                                )
+                                                if r.get("success"):
+                                                    all_rows[ri][cn] = nv
+                                                    tbl.rows = list(all_rows)
+                                                    tbl.update()
+                                                    ui.notification(
+                                                        _("updated"),
+                                                        type="positive",
+                                                    )
+                                                    dlg.close()
+                                                else:
+                                                    ui.notification(
+                                                        r.get(
+                                                            "error",
+                                                            "Update failed",
+                                                        ),
+                                                        type="negative",
+                                                    )
+
+                                            ui.button(
+                                                _("save"), on_click=_save,
+                                            ).props("flat color=positive")
+                                    dlg.open()
+
+                                _edit_timer[0] = ui.timer(
+                                    0.5, _check_edit, active=True,
+                                )
 
                         else:
                             if obj_type == "indexes":

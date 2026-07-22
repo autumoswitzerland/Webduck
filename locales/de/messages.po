@@ -301,3 +301,9 @@ msgstr "Alle %d Zeilen angezeigt"
 
 msgid "total_rows"
 msgstr "%d Zeilen"
+
+msgid "updated"
+msgstr "Aktualisiert"
+
+msgid "invalid_value"
+msgstr "Ungültiger Wert '%s' für Typ %s"
