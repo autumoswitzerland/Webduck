@@ -292,3 +292,12 @@ msgstr "Macros"
 
 msgid "no_data_found"
 msgstr "No data found"
+
+msgid "showing_rows"
+msgstr "Showing %d of %d rows"
+
+msgid "all_rows_shown"
+msgstr "All %d rows shown"
+
+msgid "total_rows"
+msgstr "%d rows"

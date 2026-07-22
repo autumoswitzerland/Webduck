@@ -71,6 +71,7 @@ _BORDER = "#333333"
 _BORDER_BTN = "#2a2a2a"
 _NAV_COLOR = "#BBBBBB"
 _TREE_WIDTH = "20%"
+_BROWSE_PAGE_SIZE = 100
 
 _DARK_CSS = f"""
 <style>
@@ -1260,7 +1261,13 @@ def create_ui_pages():
                     )
                     return
 
+                _browse_timer = [None]
+
                 def on_tree_click(e):
+                    if _browse_timer[0]:
+                        _browse_timer[0].cancel()
+                        _browse_timer[0] = None
+
                     selected = e.value if isinstance(e.value, list) else [e.value]
                     if not selected:
                         return
@@ -1270,6 +1277,9 @@ def create_ui_pages():
                     obj_type, name = node_id.split("/", 1)
                     result_container.clear()
 
+                    proj = project_select.value
+                    db = database_select.value
+
                     with result_container:
                         ui.label(
                             f"{obj_type}: {name}"
@@ -1278,51 +1288,157 @@ def create_ui_pages():
                         )
 
                         if obj_type in ("tables", "views"):
-                            q = f'SELECT * FROM "{name}" LIMIT 100'
-                        elif obj_type == "indexes":
-                            q = f"SELECT schema_name, index_name, table_name, is_unique, is_primary, expressions, sql FROM duckdb_indexes() WHERE index_name = '{name}'"
-                        elif obj_type == "sequences":
-                            q = f"SELECT schema_name, sequence_name, start_value, min_value, max_value, increment_by, cycle, last_value, sql FROM duckdb_sequences() WHERE sequence_name = '{name}'"
-                        elif obj_type == "macros":
-                            q = f"SELECT schema_name, function_name, function_type, return_type, parameters, parameter_types, macro_definition FROM duckdb_functions() WHERE function_name = '{name}' AND function_type = 'macro'"
+                            count_res = _storage.execute_query(
+                                proj, db,
+                                f'SELECT COUNT(*) FROM "{name}"',
+                            )
+                            total = (
+                                count_res["rows"][0][0]
+                                if count_res.get("success") and count_res.get("rows")
+                                else 0
+                            )
+
+                            q = f'SELECT * FROM "{name}" LIMIT {_BROWSE_PAGE_SIZE} OFFSET 0'
+                            res = _storage.execute_query(proj, db, q)
+                            if not res.get("success"):
+                                ui.label(res.get("error", "")).style("color: #f44336")
+                                return
+
+                            columns = res.get("columns", [])
+                            rows_raw = res.get("rows", [])
+                            if not columns:
+                                ui.label(_("no_data_found")).style(f"color: {_TEXT_DIM}")
+                                return
+
+                            all_rows = [dict(zip(columns, row)) for row in rows_raw]
+                            has_more = total > _BROWSE_PAGE_SIZE
+
+                            st = _("total_rows") % total if total > 0 else ""
+                            status_label = ui.label(st).style(
+                                f"color: {_TEXT_DIM}; font-size: 0.85em;"
+                            )
+
+                            tbl = ui.table(
+                                columns=[
+                                    {"name": c, "label": c, "field": c}
+                                    for c in columns
+                                ],
+                                rows=all_rows,
+                                row_key=columns[0] if columns else None,
+                            ).classes("w-full").props("flat bordered")
+
+                            if has_more:
+                                offset = [_BROWSE_PAGE_SIZE]
+                                loading = [False]
+                                done = [False]
+
+                                async def load_more():
+                                    if loading[0] or done[0]:
+                                        return
+                                    loading[0] = True
+                                    try:
+                                        need = await ui.run_javascript(
+                                            "window._webduckNeedMore || false",
+                                            timeout=2,
+                                        )
+                                        if not need:
+                                            return
+                                        ui.run_javascript(
+                                            "window._webduckNeedMore = false"
+                                        )
+                                        new_offset = offset[0]
+                                        q2 = (
+                                            f'SELECT * FROM "{name}"'
+                                            f" LIMIT {_BROWSE_PAGE_SIZE}"
+                                            f" OFFSET {new_offset}"
+                                        )
+                                        res2 = await asyncio.to_thread(
+                                            _storage.execute_query, proj, db, q2
+                                        )
+                                        if res2.get("success"):
+                                            new_rows = [
+                                                dict(zip(columns, r))
+                                                for r in res2.get("rows", [])
+                                            ]
+                                            if new_rows:
+                                                all_rows.extend(new_rows)
+                                                tbl.rows = all_rows
+                                                tbl.update()
+                                                offset[0] = new_offset + len(
+                                                    new_rows
+                                                )
+                                                if (
+                                                    len(all_rows) >= total
+                                                    or len(new_rows) < _BROWSE_PAGE_SIZE
+                                                ):
+                                                    done[0] = True
+                                                status_label.text = _(
+                                                    "total_rows"
+                                                ) % total
+                                            else:
+                                                done[0] = True
+                                    finally:
+                                        loading[0] = False
+
+                                _browse_timer[0] = ui.timer(
+                                    0.4, load_more, active=True
+                                )
+
+                                ui.run_javascript("""
+                                setTimeout(function() {
+                                    var tables = document.querySelectorAll('.q-table');
+                                    var lastTable = tables[tables.length - 1];
+                                    if (!lastTable) return;
+                                    var c = lastTable.closest('.q-card') || lastTable.parentElement;
+                                    c.style.maxHeight = '70vh';
+                                    c.style.overflowY = 'auto';
+                                    c.addEventListener('scroll', function() {
+                                        if (c.scrollTop + c.clientHeight >= c.scrollHeight - 100) {
+                                            window._webduckNeedMore = true;
+                                        }
+                                    });
+                                }, 200);
+                                """)
+
                         else:
-                            ui.label(_("error")).style(
-                                f"color: {_TEXT_DIM}"
-                            )
-                            return
+                            if obj_type == "indexes":
+                                q = f"SELECT schema_name, index_name, table_name, is_unique, is_primary, expressions, sql FROM duckdb_indexes() WHERE index_name = '{name}'"
+                            elif obj_type == "sequences":
+                                q = f"SELECT schema_name, sequence_name, start_value, min_value, max_value, increment_by, cycle, last_value, sql FROM duckdb_sequences() WHERE sequence_name = '{name}'"
+                            elif obj_type == "macros":
+                                q = f"SELECT schema_name, function_name, function_type, return_type, parameters, parameter_types, macro_definition FROM duckdb_functions() WHERE function_name = '{name}' AND function_type = 'macro'"
+                            else:
+                                ui.label(_("error")).style(f"color: {_TEXT_DIM}")
+                                return
 
-                        res = _storage.execute_query(
-                            project_select.value,
-                            database_select.value,
-                            q,
-                        )
-                        if not res.get("success"):
-                            ui.label(res.get("error", "")).style(
-                                f"color: #f44336"
-                            )
-                            return
+                            res = _storage.execute_query(proj, db, q)
+                            if not res.get("success"):
+                                ui.label(res.get("error", "")).style(
+                                    f"color: #f44336"
+                                )
+                                return
 
-                        columns = res.get("columns", [])
-                        rows_raw = res.get("rows", [])
+                            columns = res.get("columns", [])
+                            rows_raw = res.get("rows", [])
+                            if not columns:
+                                ui.label(_("no_data_found")).style(
+                                    f"color: {_TEXT_DIM}"
+                                )
+                                return
 
-                        if not columns:
-                            ui.label(_("no_data_found")).style(
-                                f"color: {_TEXT_DIM}"
-                            )
-                            return
-
-                        rows = [
-                            dict(zip(columns, row)) for row in rows_raw
-                        ]
-
-                        table = ui.table(
-                            columns=[
-                                {"name": c, "label": c, "field": c}
-                                for c in columns
-                            ],
-                            rows=rows,
-                            row_key=columns[0] if columns else None,
-                        ).classes("w-full").props("flat bordered")
+                            rows = [
+                                {k: ", ".join(v) if isinstance(v, list) else v
+                                 for k, v in dict(zip(columns, row)).items()}
+                                for row in rows_raw
+                            ]
+                            ui.table(
+                                columns=[
+                                    {"name": c, "label": c, "field": c}
+                                    for c in columns
+                                ],
+                                rows=rows,
+                                row_key=columns[0] if columns else None,
+                            ).classes("w-full").props("flat bordered")
 
                 ui.tree(
                     list(tree_data.values()),
