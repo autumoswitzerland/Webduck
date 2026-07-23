@@ -240,6 +240,43 @@ def _do_logout():
     ui.navigate.to("/login")
 
 
+# ── User preferences (server-side JSON) ──────────────────────────
+
+def _prefs_path() -> Path:
+    return Path(_storage.data_dir) / ".user_preferences.json"
+
+
+def _load_prefs() -> dict:
+    p = _prefs_path()
+    if p.exists():
+        try:
+            return json.loads(p.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def _save_prefs(data: dict) -> None:
+    _prefs_path().parent.mkdir(parents=True, exist_ok=True)
+    _prefs_path().write_text(json.dumps(data, indent=2))
+
+
+def _get_user_pref(view: str, field: str) -> str | None:
+    username = nicegui_app.storage.user.get("username", "")
+    if not username:
+        return None
+    return _load_prefs().get(username, {}).get(f"{view}_{field}")
+
+
+def _set_user_pref(view: str, field: str, value: str) -> None:
+    username = nicegui_app.storage.user.get("username", "")
+    if not username:
+        return
+    prefs = _load_prefs()
+    prefs.setdefault(username, {})[f"{view}_{field}"] = value
+    _save_prefs(prefs)
+
+
 def _make_header(_, page_title: str = ""):
     """Shared header with versioned title, icon."""
     global _drawer
@@ -259,24 +296,24 @@ def _make_header(_, page_title: str = ""):
             )
         ui.space()
         with ui.row().classes("items-center gap-4"):
-            
+
             """
             ui.button(
-                "API", 
+                "API",
                 on_click=lambda: ui.run_javascript('window.open("/docs", "_blank")')
             ).props("outline color=blue").classes("border-button")
             ui.button(
-                "Docs", 
+                "Docs",
                 on_click=lambda: ui.run_javascript(f'window.open("{_DOCS_URL}", "_blank")')
             ).props("outline color=blue").classes("border-button")
             ui.button(
                 _("logout"), on_click=_do_logout
             ).props("outline color=red").classes("border-button")
-            
+
             """
-            
+
             ui.button(
-                icon="menu", 
+                icon="menu",
                 on_click=lambda: _drawer.toggle() if _drawer else None
             ).props("outline color=grey").classes("border-button")
 
@@ -321,13 +358,13 @@ def _make_drawer(_):
             with ui.item_section().props("side"):
                 ui.icon("logout").style("color: #f54336;")
             ui.item_section(_("logout"))
-        
+
 
 def _make_footer(_):
     """Shared footer for all pages."""
     with ui.footer().classes("bg-[#040d12] items-center").style("border-top: 0.9px solid #0c2736;"):
         with ui.row().classes("items-center gap-4 w-full justify-center"):
-            
+
             with ui.row().classes("items-center gap-1"):
                 ui.html(
                     f'<img src="/static/footer-logo.png" style="height: 16px; width: auto; filter: brightness(0.65);">'
@@ -339,7 +376,7 @@ def _make_footer(_):
                     f' &mdash; Licensed under MIT'
                     f'</span>'
                 )
-            
+
             ui.label("|").style("color: #444;")
 
             ui.label("API").style("color: #565656; font-size: 0.9em; cursor: pointer;").on(
@@ -349,15 +386,15 @@ def _make_footer(_):
             )
 
             ui.label("|").style("font-size: 0.9em; color: #444;")
-            
+
             ui.link(
-                "Docs", 
-                _DOCS_URL, 
+                "Docs",
+                _DOCS_URL,
                 new_tab=True
             ).style("color: #666; font-size: 0.9em; text-decoration: none;")
-            
+
             ui.label("|").style("font-size: 0.9em; color: #444;")
-            
+
             ui.link(
                 "GitHub",
                 "https://github.com/autumo/webduck",
@@ -365,7 +402,7 @@ def _make_footer(_):
             ).style("color: #666; font-size: 0.9em; text-decoration: none;")
 
             ui.label("|").style("font-size: 0.9em; color: #444;")
-            
+
             username = nicegui_app.storage.user.get("username", "")
             with ui.row().classes("items-center gap-1"):
                 ui.label(f"{_('username')}:").style("color: #666; font-size: 0.9em;")
@@ -399,7 +436,7 @@ def create_ui_pages():
         ui.page_title(f"WebDuck {_version} — Login")
 
         with ui.column().classes("fixed-center items-center gap-6"):
-            
+
             with ui.card().style(
                 f"background: {_BG_CARD}; padding: 20px 24px 20px 24px;"
             ):
@@ -412,14 +449,14 @@ def create_ui_pages():
                     ui.label(f"WebDuck {_version}").classes(
                         "text-h4 text-bold"
                     ).style(f"color: {_YELLOW}")
-    
+
                 ui.space().classes("h-3")
-    
+
                 username = ui.input(_("username")).classes("w-full")
                 password = ui.input(
                     _("password"), password=True
                 ).classes("w-full")
-    
+
                 def handle_login():
                     if _auth.verify_user(username.value, password.value):
                         token = _auth.create_jwt_token(username.value)
@@ -432,22 +469,22 @@ def create_ui_pages():
                         ui.notify(
                             _("invalid_credentials"), type="negative"
                         )
-    
+
                 ui.on("keydown.enter", handle_login)
-    
+
                 ui.space().classes("h-3")
-    
+
                 ui.button(
                     _("login_button"), on_click=handle_login
                 ).classes("w-full")
-    
+
                 ui.space().classes("h-3")
-    
+
                 lang_options = {
                     code: get_language_name(code)
                     for code in get_supported_languages()
                 }
-    
+
                 lang_select = ui.select(
                     lang_options,
                     value=saved_lang,
@@ -460,7 +497,7 @@ def create_ui_pages():
                 ).classes("w-full q-mt-sm").props(
                     "outlined dense"
                 )
-            
+
             ui.html(
                 f'<span style="color: #777; font-size: 0.9em; text-align: center; white-space: nowrap;">'
                 f'powered by <a href="{_AUTUMO_URL}" target="_blank" '
@@ -482,7 +519,7 @@ def create_ui_pages():
         _make_header(_)
         _make_drawer(_)
         _make_footer(_)
-        
+
         with ui.card().classes("w-full"):
             ui.label(_("dashboard_title")).classes(
                 "text-h5"
@@ -872,7 +909,7 @@ def create_ui_pages():
         _make_header(_)
         _make_drawer(_)
         _make_footer(_)
-        
+
         # ── Card 1: Project & DB Selection (shared) ────────────
         with ui.card().classes("w-full"):
             ui.label(_("select_database")).classes(
@@ -881,7 +918,8 @@ def create_ui_pages():
 
             with ui.row().classes("w-full gap-4"):
                 projects = _storage.list_projects()
-                default_proj = projects[0] if projects else None
+                saved_proj = _get_user_pref("query", "project")
+                default_proj = saved_proj if saved_proj in projects else (projects[0] if projects else None)
                 project_select = ui.select(
                     projects,
                     label=_("projects"),
@@ -897,14 +935,19 @@ def create_ui_pages():
                         databases = _storage.list_databases(
                             project_select.value
                         )
-                        database_select.set_options(
-                            databases,
-                            value=databases[0] if databases else None,
-                        )
+                        saved_db = _get_user_pref("query", "database")
+                        target = saved_db if saved_db in databases else (databases[0] if databases else None)
+                        database_select.set_options(databases, value=target)
+                        _set_user_pref("query", "project", project_select.value)
+                        if target:
+                            _set_user_pref("query", "database", target)
                     else:
                         database_select.set_options([], value=None)
 
                 project_select.on_value_change(update_databases)
+                database_select.on_value_change(
+                    lambda: _set_user_pref("query", "database", database_select.value) if database_select.value else None
+                )
                 update_databases()
 
         # ── Card 2: SQL Queries ────────────────────────────────
@@ -1178,7 +1221,8 @@ def create_ui_pages():
 
             with ui.row().classes("w-full gap-4"):
                 projects = _storage.list_projects()
-                default_proj = projects[0] if projects else None
+                saved_proj = _get_user_pref("browse", "project")
+                default_proj = saved_proj if saved_proj in projects else (projects[0] if projects else None)
                 project_select = ui.select(
                     projects,
                     label=_("projects"),
@@ -1194,14 +1238,19 @@ def create_ui_pages():
                         databases = _storage.list_databases(
                             project_select.value
                         )
-                        database_select.set_options(
-                            databases,
-                            value=databases[0] if databases else None,
-                        )
+                        saved_db = _get_user_pref("browse", "database")
+                        target = saved_db if saved_db in databases else (databases[0] if databases else None)
+                        database_select.set_options(databases, value=target)
+                        _set_user_pref("browse", "project", project_select.value)
+                        if target:
+                            _set_user_pref("browse", "database", target)
                     else:
                         database_select.set_options([], value=None)
 
                 project_select.on_value_change(update_databases)
+                database_select.on_value_change(
+                    lambda: _set_user_pref("browse", "database", database_select.value) if database_select.value else None
+                )
                 update_databases()
 
         # ── Tree + Result ──────────────────────────────────────
