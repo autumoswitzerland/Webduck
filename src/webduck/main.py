@@ -138,6 +138,10 @@ html {{
 .text-caption {{
     color: {TEXT_DIM} !important;
 }}
+.text-negative {{
+    color: #f64337 !important;
+    font-weight: bold !important;
+}}
 .nicegui-error-popup {{
     border-radius: 12px !important;
     border: 1px solid #444 !important;

@@ -254,7 +254,7 @@ def register():
                             timeout=3,
                         )
                     else:
-                        ui.label(result.get("error", "Import failed")).classes("text-negative")
+                        ui.label(result.get("error", "Import failed")).style("color: #f64337")
 
             ui.button(
                 _("execute_import"), on_click=execute_import
@@ -345,7 +345,7 @@ def register():
                     if result.get("success"):
                         ui.label(_("export_success")).style("color: #66BB6A")
                     else:
-                        ui.label(result.get("error", "Export failed")).classes("text-negative")
+                        ui.label(result.get("error", "Export failed")).style("color: #f64337")
 
             ui.button(
                 _("execute_export"), on_click=execute_export

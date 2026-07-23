@@ -156,7 +156,65 @@ class StorageEngine:
                 finally:
                     con.close()
             except Exception as e:
-                return {"success": False, "error": str(e)}
+                error_msg = str(e)
+                if "Catalog Error" in error_msg:
+                    hint = self._get_drop_hint(db_path, sql)
+                    if hint:
+                        error_msg += f"\n\n{hint}"
+                return {"success": False, "error": error_msg}
+
+    def _get_drop_hint(self, db_path, sql: str) -> str | None:
+        """Check FK dependencies for DROP TABLE/VIEW and return a hint."""
+        import re
+        sql_upper = sql.strip().upper()
+
+        is_drop = (
+            sql_upper.startswith("DROP TABLE")
+            or sql_upper.startswith("DROP VIEW")
+        )
+        if not is_drop:
+            return None
+
+        m = re.search(
+            r"DROP\s+(?:TABLE|VIEW)\s+(?:IF\s+EXISTS\s+)?[`\"']?(\w+)",
+            sql, re.IGNORECASE,
+        )
+        if not m:
+            return None
+        target = m.group(1)
+
+        try:
+            con = duckdb.connect(str(db_path), read_only=True)
+            try:
+                res = con.execute(
+                    "SELECT table_name, constraint_type, "
+                    "constraint_text "
+                    "FROM duckdb_constraints() "
+                    "WHERE constraint_type = 'FOREIGN KEY' "
+                    "AND schema_name = 'main'"
+                )
+                rows = res.fetchall()
+            finally:
+                con.close()
+        except Exception:
+            return None
+
+        deps = []
+        for table_name, _, constraint_text in rows:
+            if target.lower() in constraint_text.lower():
+                deps.append((table_name, constraint_text))
+
+        if not deps:
+            return None
+
+        lines = [f'Table "{target}" is referenced by:']
+        for tbl, ctext in deps:
+            lines.append(f'  - "{tbl}" ({ctext})')
+        lines.append(
+            f'Drop "{target}" dependencies first, '
+            "or add CASCADE to your statement."
+        )
+        return "\n".join(lines)
 
     def execute_queries(
         self,

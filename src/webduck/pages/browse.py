@@ -285,7 +285,7 @@ def register():
                                 ui.label(
                                     res.get("error", "")
                                 ).style(
-                                    "color: #f44336"
+                                    "color: #f64337"
                                 )
                                 return
 
@@ -742,7 +742,7 @@ def register():
                             if not res.get("success"):
                                 ui.label(
                                     res.get("error", "")
-                                ).style("color: #f44336")
+                                ).style("color: #f64337")
                                 return
 
                             columns = res.get("columns", [])

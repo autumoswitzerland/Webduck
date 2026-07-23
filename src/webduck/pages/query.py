@@ -218,7 +218,7 @@ def register():
                                 f"color: {TEXT_DIM}"
                             )
                         else:
-                            ui.label(data).classes("text-negative")
+                            ui.label(data).style("color: #f64337")
                             all_ok = False
                     if all_ok:
                         sql_input.value = ""
@@ -361,8 +361,8 @@ def register():
                             success_count += 1
                         else:
                             error_count += 1
-                            ui.label(result["error"]).classes(
-                                "text-negative"
+                            ui.label(result["error"]).style(
+                                "color: #f64337"
                             )
 
                     if error_count == 0 and success_count > 0:
