@@ -54,11 +54,11 @@ _version: str = ""
 _icon: str = ""
 _drawer = None
 
-# ── General constants ─────────────────────────────────────────
+# General constants
 _AUTUMO_URL = "https://autumo.ch"
 _DOCS_URL = "https://webduck.autumo.ch"
 
-# ── Theme colors ──────────────────────────────────────────────
+# Theme colors
 _YELLOW = "#FFD54F"
 _YELLOW_LIGHT = "#FFE082"
 _YELLOW_DARK = "#FFC107"
@@ -71,9 +71,12 @@ _BG_CARD = "#1E1E1E"
 _BORDER = "#333333"
 _BORDER_BTN = "#2a2a2a"
 _NAV_COLOR = "#BBBBBB"
+
+# DB browsing
 _TREE_WIDTH = "20%"
 _BROWSE_PAGE_SIZE = 100
 
+# CSS theme
 _DARK_CSS = f"""
 <style>
 body {{
@@ -1747,6 +1750,8 @@ def main():
             fastapi_app,
             host=cfg.server.host,
             port=cfg.server.port,
+            log_level="warning",
+            access_log=False,
         )
 
     @cli.command()
