@@ -307,3 +307,43 @@ msgstr "Updated"
 
 msgid "invalid_value"
 msgstr "Invalid value '%s' for type %s"
+
+# Import/Export
+msgid "import_export"
+msgstr "Import/Export"
+
+msgid "csv_import"
+msgstr "CSV Import"
+
+msgid "csv_export"
+msgstr "CSV Export"
+
+msgid "drop_csv_file"
+msgstr "Drop CSV file here or click to select"
+
+msgid "table_name"
+msgstr "Table Name"
+
+msgid "table_name_required"
+msgstr "Table name is required"
+
+msgid "select_table"
+msgstr "Select Table"
+
+msgid "importing"
+msgstr "Importing..."
+
+msgid "exporting"
+msgstr "Exporting..."
+
+msgid "import_success"
+msgstr "CSV imported successfully"
+
+msgid "export_success"
+msgstr "CSV exported successfully"
+
+msgid "execute_import"
+msgstr "Import CSV"
+
+msgid "execute_export"
+msgstr "Export CSV"

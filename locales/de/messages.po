@@ -307,3 +307,43 @@ msgstr "Aktualisiert"
 
 msgid "invalid_value"
 msgstr "Ungültiger Wert '%s' für Typ %s"
+
+# Import/Export
+msgid "import_export"
+msgstr "Import/Export"
+
+msgid "csv_import"
+msgstr "CSV Import"
+
+msgid "csv_export"
+msgstr "CSV Export"
+
+msgid "drop_csv_file"
+msgstr "CSV-Datei hier ablegen oder klicken zum Auswählen"
+
+msgid "table_name"
+msgstr "Tabellenname"
+
+msgid "table_name_required"
+msgstr "Tabellenname ist erforderlich"
+
+msgid "select_table"
+msgstr "Tabelle wählen"
+
+msgid "importing"
+msgstr "Importiere..."
+
+msgid "exporting"
+msgstr "Exportiere..."
+
+msgid "import_success"
+msgstr "CSV erfolgreich importiert"
+
+msgid "export_success"
+msgstr "CSV erfolgreich exportiert"
+
+msgid "execute_import"
+msgstr "CSV importieren"
+
+msgid "execute_export"
+msgstr "CSV exportieren"

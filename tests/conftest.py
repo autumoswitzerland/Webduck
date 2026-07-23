@@ -8,7 +8,7 @@ from webduck.api import admin as admin_api
 from webduck.api import db as db_api
 from webduck.auth.manager import AuthManager, ProjectAuth
 from webduck.config import AuthConfig, ServerConfig, WebDuckConfig
-from webduck.main import create_ui_pages, setup_app
+from webduck.main import setup_app
 from webduck.storage.engine import StorageEngine
 
 
@@ -72,7 +72,6 @@ def fastapi_client(tmp_data, shared_auth, shared_storage):
     # Override with shared instances
     admin_api.set_dependencies(shared_auth, shared_storage)
     db_api.set_dependencies(shared_storage)
-    create_ui_pages()
     return TestClient(app)
 
 
