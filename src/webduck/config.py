@@ -51,6 +51,7 @@ class FileLoggingConfig(BaseModel):
     """File logging configuration."""
 
     enabled: bool = False
+    level: str = "debug"
     max_size_mb: int = 10
     max_files: int = 5
     query_log: bool = False
@@ -62,7 +63,7 @@ class ConsoleLoggingConfig(BaseModel):
 
     enabled: bool = False
     access_log: bool = False
-    log_level: str = "warning"
+    level: str = "warning"
 
 
 class LoggingConfig(BaseModel):

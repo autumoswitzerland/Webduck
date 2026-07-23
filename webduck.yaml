@@ -6,7 +6,8 @@ auth:
   jwt_secret: CHANGE-ME-TO-A-SECRET-KEY-IN-PRODUCTION
 logging:
   file:
-    enabled: false                # WebDuck file logger (webduck.log)
+    enabled: true                 # WebDuck file logger (webduck.log)
+    level: error                  # debug | info | warning | error
     max_files: 5                  # Rotated log files to keep
     max_size_mb: 10               # Max size per log file
     query_log: false              # Log every SQL query
@@ -14,7 +15,7 @@ logging:
   console:
     enabled: false                # Python logger StreamHandler (stderr)
     access_log: false             # Uvicorn access log
-    log_level: warning            # Uvicorn log level
+    level: warning                # Uvicorn log level
 server:
   data_dir: data
   host: 0.0.0.0

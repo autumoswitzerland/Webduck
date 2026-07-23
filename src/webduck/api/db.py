@@ -138,9 +138,11 @@ async def execute_query(
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
     result = storage_engine.execute_query(project, database, req.sql, req.params, read_only=True)
-    from webduck.logging import log_query
+    from webduck.logging import log_query, log_error
     log_query(project, database, req.sql, result["success"],
               row_count=result.get("row_count", 0), error=result.get("error", ""))
+    if not result["success"]:
+        log_error(f"Query failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return QueryResponse(**result)
 
 
@@ -166,9 +168,11 @@ async def execute_write(
         )
 
     result = storage_engine.execute_query(project, database, req.sql, req.params, read_only=False)
-    from webduck.logging import log_query
+    from webduck.logging import log_query, log_error
     log_query(project, database, req.sql, result["success"],
               row_count=result.get("row_count", 0), error=result.get("error", ""))
+    if not result["success"]:
+        log_error(f"Write failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return QueryResponse(**result)
 
 
@@ -209,6 +213,9 @@ async def import_csv(
         )
 
     result = storage_engine.import_csv(project, database, table_name, Path(csv_path))
+    if not result.get("success"):
+        from webduck.logging import log_error
+        log_error(f"CSV import failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return result
 
 
@@ -235,4 +242,7 @@ async def export_csv(
         )
 
     result = storage_engine.export_csv(project, database, table_name, Path(csv_path))
+    if not result.get("success"):
+        from webduck.logging import log_error
+        log_error(f"CSV export failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return result

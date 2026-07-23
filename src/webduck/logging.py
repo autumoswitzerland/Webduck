@@ -34,7 +34,7 @@ _logger: logging.Logger | None = None
 
 def setup_logging(data_dir: Path, enabled: bool = False, max_size_mb: int = 10,
                   max_files: int = 5, query_log: bool = False,
-                  log_dir: str = "",
+                  log_dir: str = "", level: str = "debug",
                   console_enabled: bool = False) -> logging.Logger:
     """Configure and return the WebDuck logger.
 
@@ -52,6 +52,8 @@ def setup_logging(data_dir: Path, enabled: bool = False, max_size_mb: int = 10,
         If ``True``, every SQL query is logged at INFO level.
     log_dir : str
         Directory for ``webduck.log``.  Empty string falls back to *data_dir*.
+    level : str
+        Minimum log level for the file handler (debug/info/warning/error).
     console_enabled : bool
         If ``True``, a StreamHandler (stderr) is attached to the logger.
     """
@@ -72,7 +74,8 @@ def setup_logging(data_dir: Path, enabled: bool = False, max_size_mb: int = 10,
         _logger = logger
         return logger
 
-    logger.setLevel(logging.DEBUG)
+    _level = getattr(logging, level.upper(), logging.DEBUG)
+    logger.setLevel(_level)
     effective_dir = Path(log_dir) if log_dir else data_dir
     effective_dir.mkdir(parents=True, exist_ok=True)
     log_path = effective_dir / "webduck.log"
@@ -83,20 +86,20 @@ def setup_logging(data_dir: Path, enabled: bool = False, max_size_mb: int = 10,
         backupCount=max_files,
         encoding="utf-8",
     )
-    file_handler.setLevel(logging.DEBUG)
+    file_handler.setLevel(_level)
     file_handler.setFormatter(logging.Formatter(
         "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     ))
     logger.addHandler(file_handler)
 
-    # Console handler at INFO
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    console.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
-    )
-    logger.addHandler(console)
+    if console_enabled:
+        console = logging.StreamHandler()
+        console.setLevel(logging.INFO)
+        console.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
+        )
+        logger.addHandler(console)
 
     _logger = logger
     logger.info("Logging enabled → %s", log_path)
@@ -123,3 +126,13 @@ def log_query(project: str, database: str, sql: str, success: bool,
         msg += f" err={error}"
     logger.info(msg)
     logger.debug("SQL: %s", sql[:500])
+
+
+def log_warning(msg: str) -> None:
+    """Log a warning message."""
+    get_logger().warning(msg)
+
+
+def log_error(msg: str) -> None:
+    """Log an error message."""
+    get_logger().error(msg)

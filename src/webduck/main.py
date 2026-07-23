@@ -458,14 +458,23 @@ def create_ui_pages():
                 ).classes("w-full")
 
                 def handle_login():
-                    if _auth.verify_user(username.value, password.value):
-                        token = _auth.create_jwt_token(username.value)
-                        nicegui_app.storage.user["token"] = token
-                        nicegui_app.storage.user["username"] = (
-                            username.value
-                        )
-                        ui.navigate.to("/")
-                    else:
+                    try:
+                        if _auth.verify_user(username.value, password.value):
+                            token = _auth.create_jwt_token(username.value)
+                            nicegui_app.storage.user["token"] = token
+                            nicegui_app.storage.user["username"] = (
+                                username.value
+                            )
+                            ui.navigate.to("/")
+                        else:
+                            from webduck.logging import log_warning
+                            log_warning(f"Failed login attempt for user '{username.value}'")
+                            ui.notify(
+                                _("invalid_credentials"), type="negative"
+                            )
+                    except Exception as e:
+                        from webduck.logging import log_error
+                        log_error(f"Login error: {e}")
                         ui.notify(
                             _("invalid_credentials"), type="negative"
                         )
@@ -525,10 +534,16 @@ def create_ui_pages():
                 "text-h5"
             ).style(f"color: {_YELLOW_LIGHT}")
 
-            projects = _storage.list_projects()
-            total_databases = sum(
-                len(_storage.list_databases(p)) for p in projects
-            )
+            try:
+                projects = _storage.list_projects()
+                total_databases = sum(
+                    len(_storage.list_databases(p)) for p in projects
+                )
+            except Exception as e:
+                from webduck.logging import log_error
+                log_error(f"Dashboard load error: {e}")
+                projects = []
+                total_databases = 0
 
             with ui.row().classes("w-full gap-4"):
                 with ui.card().classes("flex-grow justify-center items-center").style(
@@ -602,7 +617,13 @@ def create_ui_pages():
                 ).props("outline").classes("border-button")
 
         # ── Project list ───────────────────────────────────
-        projects = _storage.list_projects()
+        try:
+            projects = _storage.list_projects()
+        except Exception as e:
+            from webduck.logging import log_error
+            log_error(f"Projects list error: {e}")
+            projects = []
+
         if projects:
             for project in projects:
                 with ui.card().classes("w-full q-mt-sm"):
@@ -622,7 +643,13 @@ def create_ui_pages():
                         ).style(f"color: {_YELLOW_LIGHT}")
                         ui.space()
 
-                        dbs = _storage.list_databases(project)
+                        try:
+                            dbs = _storage.list_databases(project)
+                        except Exception as e:
+                            from webduck.logging import log_error
+                            log_error(f"Databases list error [{project}]: {e}")
+                            dbs = []
+
                         ui.label(
                             f"{len(dbs)} {_('databases')}"
                         ).classes("text-caption")
@@ -1006,11 +1033,16 @@ def create_ui_pages():
                 if not sql_input.value or not database_select.value:
                     return
 
-                results = _storage.execute_queries(
-                    project_select.value,
-                    database_select.value,
-                    sql_input.value,
-                )
+                try:
+                    results = _storage.execute_queries(
+                        project_select.value,
+                        database_select.value,
+                        sql_input.value,
+                    )
+                except Exception as e:
+                    from webduck.logging import log_error
+                    log_error(f"SQL query error [{project_select.value}/{database_select.value}]: {e}")
+                    results = [{"success": False, "error": str(e), "sql": sql_input.value}]
 
                 with result_area:
                     result_area.clear()
@@ -1289,7 +1321,13 @@ def create_ui_pages():
                     ("macros", "settings",
                      f"SELECT function_name AS table_name FROM duckdb_functions() WHERE database_name = '{db}' AND function_type = 'macro' ORDER BY function_name"),
                 ]:
-                    res = _storage.execute_query(proj, db, query)
+                    try:
+                        res = _storage.execute_query(proj, db, query)
+                    except Exception as e:
+                        from webduck.logging import log_error
+                        log_error(f"Browse query error [{proj}/{db}] {obj_type}: {e}")
+                        res = {"success": False, "error": str(e)}
+
                     items = []
                     if res.get("success") and res.get("rows"):
                         for row in res["rows"]:
@@ -1345,10 +1383,16 @@ def create_ui_pages():
                         )
 
                         if obj_type in ("tables", "views"):
-                            count_res = _storage.execute_query(
-                                proj, db,
-                                f'SELECT COUNT(*) FROM "{name}"',
-                            )
+                            try:
+                                count_res = _storage.execute_query(
+                                    proj, db,
+                                    f'SELECT COUNT(*) FROM "{name}"',
+                                )
+                            except Exception as e:
+                                from webduck.logging import log_error
+                                log_error(f"Browse count error [{proj}/{db}] {name}: {e}")
+                                count_res = {"success": False}
+
                             total = (
                                 count_res["rows"][0][0]
                                 if count_res.get("success") and count_res.get("rows")
@@ -1356,7 +1400,13 @@ def create_ui_pages():
                             )
 
                             q = f'SELECT * FROM "{name}" LIMIT {_BROWSE_PAGE_SIZE} OFFSET 0'
-                            res = _storage.execute_query(proj, db, q)
+                            try:
+                                res = _storage.execute_query(proj, db, q)
+                            except Exception as e:
+                                from webduck.logging import log_error
+                                log_error(f"Browse query error [{proj}/{db}] {name}: {e}")
+                                res = {"success": False, "error": str(e)}
+
                             if not res.get("success"):
                                 ui.label(res.get("error", "")).style("color: #f44336")
                                 return
@@ -1765,6 +1815,7 @@ def main():
             max_files=cfg.logging.file.max_files,
             query_log=cfg.logging.file.query_log,
             log_dir=cfg.logging.file.log_dir,
+            level=cfg.logging.file.level,
             console_enabled=cfg.logging.console.enabled,
         )
 
@@ -1801,7 +1852,7 @@ def main():
             fastapi_app,
             host=cfg.server.host,
             port=cfg.server.port,
-            log_level=cfg.logging.console.log_level if cfg.logging.console.enabled else "warning",
+            log_level=cfg.logging.console.level if cfg.logging.console.enabled else "warning",
             access_log=cfg.logging.console.access_log if cfg.logging.console.enabled else False,
         )
 

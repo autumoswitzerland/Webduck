@@ -105,6 +105,8 @@ async def login(req: LoginRequest) -> LoginResponse:
         raise HTTPException(status_code=500, detail="Auth manager not initialized")
 
     if not auth_manager.verify_user(req.username, req.password):
+        from webduck.logging import log_warning
+        log_warning(f"Failed login attempt for user '{req.username}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
