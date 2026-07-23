@@ -22,6 +22,7 @@ auth: AuthManager | None = None
 project_auth: ProjectAuth | None = None
 version: str = ""
 icon: str = ""
+max_upload_mb: int = 5
 
 AUTUMO_URL = "https://autumo.ch"
 DOCS_URL = "https://webduck.autumo.ch"
@@ -52,10 +53,11 @@ def init_context(
     proj_auth: ProjectAuth,
 ) -> None:
     """Initialize shared context. Called once from setup_app()."""
-    global config, storage, auth, project_auth, version, icon
+    global config, storage, auth, project_auth, version, icon, max_upload_mb
     config = cfg
     storage = store
     auth = auth_mgr
     project_auth = proj_auth
     version = cfg.version
     icon = cfg.icon
+    max_upload_mb = cfg.server.max_upload_mb

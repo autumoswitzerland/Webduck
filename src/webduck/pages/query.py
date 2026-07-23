@@ -291,8 +291,8 @@ def register():
                 }});
 
                 function readFile(file) {{
-                    if (file.size > 2097152) {{
-                        alert('{_("file_too_large")}');
+                    if (file.size > {ctx.max_upload_mb * 1024 * 1024}) {{
+                        alert('{_("file_too_large").format(ctx.max_upload_mb)}');
                         return;
                     }}
                     var reader = new FileReader();

@@ -119,71 +119,72 @@ def register():
             """
             ui.html(drop_html)
 
-            js_setup = """
-            setTimeout(function() {
+            max_bytes = ctx.max_upload_mb * 1024 * 1024
+            js_setup = f"""
+            setTimeout(function() {{
                 var zone = document.getElementById('csv-drop-zone');
                 var fileInput = document.getElementById('csv-file-input');
                 if (!zone || !fileInput) return;
 
-                zone.addEventListener('click', function() {
+                zone.addEventListener('click', function() {{
                     fileInput.click();
-                });
+                }});
 
-                zone.addEventListener('dragover', function(e) {
+                zone.addEventListener('dragover', function(e) {{
                     e.preventDefault();
                     zone.style.borderColor = '#FFD54F';
-                });
+                }});
 
-                zone.addEventListener('dragleave', function(e) {
+                zone.addEventListener('dragleave', function(e) {{
                     e.preventDefault();
                     zone.style.borderColor = '#444';
-                });
+                }});
 
-                zone.addEventListener('drop', function(e) {
+                zone.addEventListener('drop', function(e) {{
                     e.preventDefault();
                     zone.style.borderColor = '#444';
                     var files = e.dataTransfer.files;
-                    if (files.length > 0) {
+                    if (files.length > 0) {{
                         var file = files[0];
-                        if (file.size > 2 * 1024 * 1024) {
-                            alert('File too large (max 2MB)');
+                        if (file.size > {max_bytes}) {{
+                            alert('{_("file_too_large").format(ctx.max_upload_mb)}');
                             return;
-                        }
+                        }}
                         var reader = new FileReader();
-                        reader.onload = function(ev) {
+                        reader.onload = function(ev) {{
                             window._csvUploadContent = ev.target.result;
                             var info = document.getElementById('csv-file-info');
-                            if (info) {
+                            if (info) {{
                                 info.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
                                 info.style.color = '#66BB6A';
-                            }
+                            }}
                             zone.style.borderColor = '#66BB6A';
-                        };
+                        }};
                         reader.readAsText(file);
-                    }
-                });
+                    }}
+                }});
 
-                fileInput.addEventListener('change', function(e) {
+                fileInput.addEventListener('change', function(e) {{
                     var file = e.target.files[0];
-                    if (file) {
-                        if (file.size > 2 * 1024 * 1024) {
-                            alert('File too large (max 2MB)');
+                    if (file) {{
+                        if (file.size > {max_bytes}) {{
+                            alert('{_("file_too_large").format(ctx.max_upload_mb)}');
                             return;
-                        }
+                        }}
                         var reader = new FileReader();
-                        reader.onload = function(ev) {
+                        reader.onload = function(ev) {{
                             window._csvUploadContent = ev.target.result;
                             var info = document.getElementById('csv-file-info');
-                            if (info) {
+                            if (info) {{
                                 info.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
                                 info.style.color = '#66BB6A';
-                            }
+                            }}
                             zone.style.borderColor = '#66BB6A';
-                        };
+                        }};
                         reader.readAsText(file);
-                    }
-                });
-            }, 100);
+                    }}
+                }});
+            }}, 100);
             """
             ui.run_javascript(js_setup)
 

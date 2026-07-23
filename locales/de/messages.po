@@ -260,7 +260,7 @@ msgid "drop_sql_file"
 msgstr "SQL-Datei hier ablegen oder klicken zum Auswählen"
 
 msgid "file_too_large"
-msgstr "Datei zu gross (max 2 MB)"
+msgstr "Datei zu gross (max {0} MB)"
 
 msgid "file_loaded"
 msgstr "Geladen: %s"
