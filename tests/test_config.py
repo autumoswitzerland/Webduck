@@ -10,7 +10,8 @@ def test_default_config():
     assert cfg.server.host == "0.0.0.0"
     assert cfg.server.port == 8998
     assert cfg.auth.jwt_algorithm == "HS256"
-    assert cfg.logging.enabled is False
+    assert cfg.logging.file.enabled is False
+    assert cfg.logging.console.enabled is False
 
 
 def test_load_nonexistent_returns_defaults(tmp_path):

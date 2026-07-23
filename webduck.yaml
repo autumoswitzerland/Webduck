@@ -3,12 +3,18 @@ icon: "icon.svg"
 auth:
   jwt_algorithm: HS256
   jwt_expire_minutes: 60
-  jwt_secret: nWswQxaEG2u3t4QNFZrVO0QsTeqhmyB5asQNPnYf9yPRVZYOCp1-jZ_Q8_-yMb2D
+  jwt_secret: CHANGE-ME-TO-A-SECRET-KEY-IN-PRODUCTION
 logging:
-  enabled: false
-  max_files: 5
-  max_size_mb: 10
-  query_log: false
+  file:
+    enabled: false                # WebDuck file logger (webduck.log)
+    max_files: 5                  # Rotated log files to keep
+    max_size_mb: 10               # Max size per log file
+    query_log: false              # Log every SQL query
+    log_dir: data/log             # Log directory (empty = data_dir)
+  console:
+    enabled: false                # Python logger StreamHandler (stderr)
+    access_log: false             # Uvicorn access log
+    log_level: warning            # Uvicorn log level
 server:
   data_dir: data
   host: 0.0.0.0

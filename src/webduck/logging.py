@@ -33,21 +33,27 @@ _logger: logging.Logger | None = None
 
 
 def setup_logging(data_dir: Path, enabled: bool = False, max_size_mb: int = 10,
-                  max_files: int = 5, query_log: bool = False) -> logging.Logger:
+                  max_files: int = 5, query_log: bool = False,
+                  log_dir: str = "",
+                  console_enabled: bool = False) -> logging.Logger:
     """Configure and return the WebDuck logger.
 
     Parameters
     ----------
     data_dir : Path
-        Directory where ``webduck.log`` is written.
+        Fallback directory when *log_dir* is empty.
     enabled : bool
-        If ``False`` only WARNING+ messages are emitted (no file handler).
+        If ``False`` no file handler is created.
     max_size_mb : int
         Maximum size of a single log file before rotation.
     max_files : int
         Number of rotated files to keep.
     query_log : bool
         If ``True``, every SQL query is logged at INFO level.
+    log_dir : str
+        Directory for ``webduck.log``.  Empty string falls back to *data_dir*.
+    console_enabled : bool
+        If ``True``, a StreamHandler (stderr) is attached to the logger.
     """
     global _logger
 
@@ -57,18 +63,19 @@ def setup_logging(data_dir: Path, enabled: bool = False, max_size_mb: int = 10,
     logger.handlers.clear()
 
     if not enabled:
-        # Minimal console handler for warnings/errors only
-        logger.setLevel(logging.WARNING)
-        console = logging.StreamHandler()
-        console.setLevel(logging.WARNING)
-        console.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
-        logger.addHandler(console)
+        if console_enabled:
+            logger.setLevel(logging.WARNING)
+            console = logging.StreamHandler()
+            console.setLevel(logging.WARNING)
+            console.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+            logger.addHandler(console)
         _logger = logger
         return logger
 
     logger.setLevel(logging.DEBUG)
-    data_dir.mkdir(parents=True, exist_ok=True)
-    log_path = data_dir / "webduck.log"
+    effective_dir = Path(log_dir) if log_dir else data_dir
+    effective_dir.mkdir(parents=True, exist_ok=True)
+    log_path = effective_dir / "webduck.log"
 
     file_handler = logging.handlers.RotatingFileHandler(
         log_path,

@@ -1760,10 +1760,12 @@ def main():
         from webduck.logging import setup_logging
         setup_logging(
             cfg.server.data_dir,
-            enabled=cfg.logging.enabled,
-            max_size_mb=cfg.logging.max_size_mb,
-            max_files=cfg.logging.max_files,
-            query_log=cfg.logging.query_log,
+            enabled=cfg.logging.file.enabled,
+            max_size_mb=cfg.logging.file.max_size_mb,
+            max_files=cfg.logging.file.max_files,
+            query_log=cfg.logging.file.query_log,
+            log_dir=cfg.logging.file.log_dir,
+            console_enabled=cfg.logging.console.enabled,
         )
 
         fastapi_app = setup_app(cfg)
@@ -1799,8 +1801,8 @@ def main():
             fastapi_app,
             host=cfg.server.host,
             port=cfg.server.port,
-            log_level="warning",
-            access_log=False,
+            log_level=cfg.logging.console.log_level if cfg.logging.console.enabled else "warning",
+            access_log=cfg.logging.console.access_log if cfg.logging.console.enabled else False,
         )
 
     @cli.command()

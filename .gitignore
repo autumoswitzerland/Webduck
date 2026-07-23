@@ -68,3 +68,4 @@ Thumbs.db
 .git/
 /TODO.txt
 /.nicegui/
+/webduck-dev.yaml

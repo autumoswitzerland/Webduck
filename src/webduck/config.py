@@ -47,13 +47,29 @@ class AuthConfig(BaseModel):
     jwt_expire_minutes: int = 60
 
 
-class LoggingConfig(BaseModel):
-    """Logging configuration."""
+class FileLoggingConfig(BaseModel):
+    """File logging configuration."""
 
     enabled: bool = False
     max_size_mb: int = 10
     max_files: int = 5
     query_log: bool = False
+    log_dir: str = "data/log"
+
+
+class ConsoleLoggingConfig(BaseModel):
+    """Console logging configuration (uvicorn)."""
+
+    enabled: bool = False
+    access_log: bool = False
+    log_level: str = "warning"
+
+
+class LoggingConfig(BaseModel):
+    """Logging configuration."""
+
+    file: FileLoggingConfig = Field(default_factory=FileLoggingConfig)
+    console: ConsoleLoggingConfig = Field(default_factory=ConsoleLoggingConfig)
 
 
 class WebDuckConfig(BaseModel):
