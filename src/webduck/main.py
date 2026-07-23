@@ -203,6 +203,13 @@ def setup_app(cfg: WebDuckConfig) -> FastAPI:
     async def health():
         return {"status": "ok"}
 
+    # Redirect root to UI
+    from fastapi.responses import RedirectResponse
+
+    @app.get("/")
+    async def root():
+        return RedirectResponse(url="/ui")
+
     return app
 
 
