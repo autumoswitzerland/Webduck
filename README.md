@@ -1,9 +1,16 @@
-# WebDuck
+<div align="center">
+  <img src="static/icon.svg" width="128">
+  <h1>WebDuck</h1>
 
-A self-hosted DuckDB-as-a-Service server with REST API and Web UI.
-WebDuck is designed for web hosting providers who want to offer their customers
-a ready-to-use administration interface for DuckDB databases and data analytics
-— out of the box, just like the database admin tools that come with any hosting package.
+  A self-hosted DuckDB-as-a-Service server with REST API and Web UI.
+  WebDuck is designed for web hosting providers who want to offer their customers
+  a ready-to-use administration interface for DuckDB databases and data analytics
+  — out of the box, just like the database admin tools that come with any hosting package.
+
+  <img src="https://img.shields.io/badge/version-1.0.0-FFD54F">
+  <img src="https://img.shields.io/badge/license-MIT-green">
+  <img src="https://img.shields.io/badge/python-3.11+-blue">
+</div>
 
 ## Features
 
