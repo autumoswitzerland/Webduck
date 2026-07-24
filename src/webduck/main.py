@@ -251,7 +251,9 @@ def main():
         "--config", type=click.Path(), default=None,
         help="Config file path",
     )
-    def init(config):
+    @click.option("--username", default=None, help="Admin username (non-interactive)")
+    @click.option("--password", default=None, help="Admin password (non-interactive)")
+    def init(config, username, password):
         """Initialize WebDuck (create admin user)."""
         config_path = Path(config) if config else Path("webduck.yaml")
         cfg = load_config(config_path)
@@ -259,15 +261,17 @@ def main():
         click.echo("WebDuck Initialization")
         click.echo("=" * 40)
 
-        username = click.prompt("Admin username")
-        password = click.prompt("Admin password", hide_input=True)
-        password_confirm = click.prompt(
-            "Confirm password", hide_input=True
-        )
-
-        if password != password_confirm:
-            click.echo("Error: Passwords don't match", err=True)
-            sys.exit(1)
+        if username and password:
+            click.echo(f"Creating admin user '{username}'")
+        else:
+            username = click.prompt("Admin username")
+            password = click.prompt("Admin password", hide_input=True)
+            password_confirm = click.prompt(
+                "Confirm password", hide_input=True
+            )
+            if password != password_confirm:
+                click.echo("Error: Passwords don't match", err=True)
+                sys.exit(1)
 
         cfg.server.data_dir.mkdir(parents=True, exist_ok=True)
 

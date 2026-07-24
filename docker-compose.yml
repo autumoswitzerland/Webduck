@@ -2,14 +2,16 @@ version: '3.8'
 
 services:
   webduck:
-    build: .
+    image: autumo/webduck
     ports:
-      - "9000:9000"
+      - "8998:8998"
     volumes:
       - webduck_data:/data
     environment:
       - WEBDUCK_HOST=0.0.0.0
       - WEBDUCK_PORT=8998
+      - WEBDUCK_ADMIN_USER=admin
+      - WEBDUCK_ADMIN_PASS=changeme
     restart: unless-stopped
 
 volumes:
