@@ -248,6 +248,12 @@ pytest tests/ -v
 ruff check src/ tests/
 ```
 
+## Donate
+
+WebDuck is free and open-source. If you find it useful, consider supporting the development:
+
+[![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-blue)](https://www.paypal.com/ncp/payment/NZ4CC6SVF9HN8)
+
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
