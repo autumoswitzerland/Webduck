@@ -56,7 +56,7 @@ class FileLoggingConfig(BaseModel):
     max_size_mb: int = 10
     max_files: int = 5
     query_log: bool = False
-    log_dir: str = "data/log"
+    log_dir: str = "log"
 
 
 class ConsoleLoggingConfig(BaseModel):

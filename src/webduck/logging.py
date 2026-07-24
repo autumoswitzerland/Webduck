@@ -51,7 +51,7 @@ def setup_logging(data_dir: Path, enabled: bool = False, max_size_mb: int = 10,
     query_log : bool
         If ``True``, every SQL query is logged at INFO level.
     log_dir : str
-        Directory for ``webduck.log``.  Empty string falls back to *data_dir*.
+        Directory for ``webduck.log``.  Empty string falls back to ``log/``.
     level : str
         Minimum log level for the file handler (debug/info/warning/error).
     console_enabled : bool
@@ -76,7 +76,7 @@ def setup_logging(data_dir: Path, enabled: bool = False, max_size_mb: int = 10,
 
     _level = getattr(logging, level.upper(), logging.DEBUG)
     logger.setLevel(_level)
-    effective_dir = Path(log_dir) if log_dir else data_dir
+    effective_dir = Path(log_dir) if log_dir else Path("log")
     effective_dir.mkdir(parents=True, exist_ok=True)
     log_path = effective_dir / "webduck.log"
 

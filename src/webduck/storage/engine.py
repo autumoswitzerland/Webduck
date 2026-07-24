@@ -26,6 +26,7 @@
 
 """WebDuck storage engine - DuckDB operations."""
 
+import json
 import threading
 from pathlib import Path
 from typing import Any
@@ -48,21 +49,84 @@ class StorageEngine:
                 self._locks[db_path] = threading.Lock()
             return self._locks[db_path]
 
+    # ------------------------------------------------------------------
+    #  Project order (JSON)
+    # ------------------------------------------------------------------
+
+    def _project_order_path(self) -> Path:
+        return self.data_dir / ".projects.json"
+
+    def _load_project_order(self) -> list[str]:
+        """Load project order from JSON, sync with filesystem."""
+        if not self.data_dir.exists():
+            return []
+
+        fs_projects = {
+            d.name
+            for d in self.data_dir.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        }
+
+        order_path = self._project_order_path()
+        if order_path.exists():
+            try:
+                data = json.loads(
+                    order_path.read_text(encoding="utf-8")
+                )
+                ordered = [
+                    p for p in data.get("projects", [])
+                    if p in fs_projects
+                ]
+            except (json.JSONDecodeError, KeyError):
+                ordered = []
+        else:
+            ordered = []
+
+        for p in sorted(fs_projects - set(ordered)):
+            ordered.append(p)
+
+        self._save_project_order(ordered)
+        return ordered
+
+    def _save_project_order(
+        self, projects: list[str]
+    ) -> None:
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        order_path = self._project_order_path()
+        order_path.write_text(
+            json.dumps(
+                {"projects": projects},
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
     def _get_db_path(self, project: str, database: str) -> Path:
         """Get the full path to a database file."""
         return self.data_dir / project / f"{database}.duckdb"
 
     def list_projects(self) -> list[str]:
-        """List all projects in the data directory."""
-        if not self.data_dir.exists():
-            return []
-        projects = [
-            d.name
-            for d in self.data_dir.iterdir()
-            if d.is_dir() and not d.name.startswith(".")
-        ]
-        projects.sort()
-        return projects
+        """List all projects in JSON order, synced with filesystem."""
+        return self._load_project_order()
+
+    def create_project(self, project: str) -> bool:
+        """Create a new project directory and add to order (at top)."""
+        project_dir = self.data_dir / project
+        if project_dir.exists():
+            return False
+        project_dir.mkdir(parents=True, exist_ok=True)
+        order = self._load_project_order()
+        if project not in order:
+            order.insert(0, project)
+            self._save_project_order(order)
+        return True
+
+    def reorder_projects(
+        self, projects: list[str]
+    ) -> None:
+        """Save a new project order to JSON."""
+        self._save_project_order(projects)
 
     def list_databases(self, project: str) -> list[str]:
         """List all databases in a project."""
@@ -115,6 +179,12 @@ class StorageEngine:
 
         import shutil
         shutil.rmtree(project_dir)
+
+        order = self._load_project_order()
+        if project in order:
+            order.remove(project)
+            self._save_project_order(order)
+
         return True
 
     def execute_query(

@@ -130,14 +130,21 @@ async def create_project(
 ) -> dict:
     """Create a new project."""
     if not storage_engine:
-        raise HTTPException(status_code=500, detail="Storage engine not initialized")
+        raise HTTPException(
+            status_code=500,
+            detail="Storage engine not initialized",
+        )
 
-    project_dir = storage_engine.data_dir / req.name
-    if project_dir.exists():
-        raise HTTPException(status_code=400, detail="Project already exists")
+    if not storage_engine.create_project(req.name):
+        raise HTTPException(
+            status_code=400,
+            detail="Project already exists",
+        )
 
-    project_dir.mkdir(parents=True, exist_ok=True)
-    return {"success": True, "message": f"Project '{req.name}' created"}
+    return {
+        "success": True,
+        "message": f"Project '{req.name}' created",
+    }
 
 
 @router.delete("/projects/{project}")
@@ -152,7 +159,31 @@ async def delete_project(project: str, username: str = Depends(verify_admin)) ->
     return {"success": True, "message": f"Project '{project}' deleted"}
 
 
-@router.get("/projects/{project}/databases")
+class ReorderRequest(BaseModel):
+    projects: list[str]
+
+
+@router.post("/reorder-projects")
+async def reorder_projects(
+    req: ReorderRequest,
+    username: str = Depends(verify_admin),
+) -> dict:
+    """Reorder projects."""
+    if not storage_engine:
+        raise HTTPException(
+            status_code=500,
+            detail="Storage engine not initialized",
+        )
+    storage_engine.reorder_projects(req.projects)
+    return {
+        "success": True,
+        "message": "Projects reordered",
+    }
+
+
+@router.get(
+    "/projects/{project}/databases"
+)
 async def list_databases(project: str, username: str = Depends(verify_admin)) -> list[str]:
     """List all databases in a project."""
     if not storage_engine:

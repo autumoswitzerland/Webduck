@@ -210,6 +210,24 @@ def setup_app(cfg: WebDuckConfig) -> FastAPI:
     async def root():
         return RedirectResponse(url="/ui")
 
+    # Reorder projects (called from UI via JS fetch)
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    @app.post("/api/reorder-projects")
+    async def reorder_projects_ui(request: Request):
+        try:
+            body = await request.json()
+            projects = body.get("projects", [])
+            _storage.reorder_projects(projects)
+            return JSONResponse({"success": True, "count": len(projects)})
+        except Exception as e:
+            from webduck.logging import log_error
+            log_error(f"Reorder projects error: {e}")
+            return JSONResponse(
+                {"error": str(e)}, status_code=500
+            )
+
     return app
 
 
