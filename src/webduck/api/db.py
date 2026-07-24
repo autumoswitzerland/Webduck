@@ -39,6 +39,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 
 from webduck.auth.manager import ProjectAuth
+from webduck.logging import log_error, log_query, log_warning
 from webduck.storage.engine import StorageEngine
 
 router = APIRouter(prefix="/db", tags=["database"])
@@ -62,12 +63,14 @@ def verify_project_key(
 ) -> str | None:
     """Verify project key and return password. Optional if no password is set."""
     if not project_auth:
+        log_error("verify_project_key: Project auth not initialized")
         raise HTTPException(status_code=500, detail="Project auth not initialized")
 
     if not project_auth.has_database_password(project, database):
         return None
 
     if not x_project_key:
+        log_warning(f"verify_project_key: Missing auth header for '{project}/{database}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=(
@@ -79,12 +82,14 @@ def verify_project_key(
     try:
         _, password = x_project_key.split(":", 1)
     except ValueError:
+        log_warning(f"verify_project_key: Invalid key format for '{project}/{database}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid project key format. Use: project:password",
         )
 
     if not project_auth.has_database_access(project, database, password, "read"):
+        log_warning(f"verify_project_key: Invalid credentials for '{project}/{database}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
@@ -114,6 +119,7 @@ class QueryResponse(BaseModel):
 async def list_projects() -> list[str]:
     """List all projects (public)."""
     if not storage_engine:
+        log_error("list_projects: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
     return storage_engine.list_projects()
 
@@ -122,6 +128,7 @@ async def list_projects() -> list[str]:
 async def list_databases(project: str) -> list[str]:
     """List all databases in a project (public)."""
     if not storage_engine:
+        log_error("list_databases: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
     return storage_engine.list_databases(project)
 
@@ -135,10 +142,10 @@ async def execute_query(
 ) -> QueryResponse:
     """Execute a SQL query (read-only)."""
     if not storage_engine:
+        log_error("execute_query: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
     result = storage_engine.execute_query(project, database, req.sql, req.params, read_only=True)
-    from webduck.logging import log_query, log_error
     log_query(project, database, req.sql, result["success"],
               row_count=result.get("row_count", 0), error=result.get("error", ""))
     if not result["success"]:
@@ -155,20 +162,22 @@ async def execute_write(
 ) -> QueryResponse:
     """Execute a SQL query (read-write)."""
     if not storage_engine:
+        log_error("execute_write: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
     # Verify write access
     if not project_auth:
+        log_error("execute_write: Project auth not initialized")
         raise HTTPException(status_code=500, detail="Project auth not initialized")
 
     if not project_auth.has_database_access(project, database, password, "write"):
+        log_warning(f"execute_write: Write access denied for '{project}/{database}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Write access denied",
         )
 
     result = storage_engine.execute_query(project, database, req.sql, req.params, read_only=False)
-    from webduck.logging import log_query, log_error
     log_query(project, database, req.sql, result["success"],
               row_count=result.get("row_count", 0), error=result.get("error", ""))
     if not result["success"]:
@@ -184,6 +193,7 @@ async def list_tables(
 ) -> dict:
     """List all tables in a database."""
     if not storage_engine:
+        log_error("list_tables: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
     result = storage_engine.get_table_info(project, database)
@@ -200,13 +210,16 @@ async def import_csv(
 ) -> dict:
     """Import a CSV file into a table."""
     if not storage_engine:
+        log_error("import_csv: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
     # Verify write access
     if not project_auth:
+        log_error("import_csv: Project auth not initialized")
         raise HTTPException(status_code=500, detail="Project auth not initialized")
 
     if not project_auth.has_database_access(project, database, password, "write"):
+        log_warning(f"import_csv: Write access denied for '{project}/{database}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Write access denied",
@@ -214,7 +227,6 @@ async def import_csv(
 
     result = storage_engine.import_csv(project, database, table_name, Path(csv_path))
     if not result.get("success"):
-        from webduck.logging import log_error
         log_error(f"CSV import failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return result
 
@@ -229,13 +241,16 @@ async def export_csv(
 ) -> dict:
     """Export a table to CSV."""
     if not storage_engine:
+        log_error("export_csv: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
     # Verify write access
     if not project_auth:
+        log_error("export_csv: Project auth not initialized")
         raise HTTPException(status_code=500, detail="Project auth not initialized")
 
     if not project_auth.has_database_access(project, database, password, "write"):
+        log_warning(f"export_csv: Write access denied for '{project}/{database}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Write access denied",
@@ -243,6 +258,5 @@ async def export_csv(
 
     result = storage_engine.export_csv(project, database, table_name, Path(csv_path))
     if not result.get("success"):
-        from webduck.logging import log_error
         log_error(f"CSV export failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return result

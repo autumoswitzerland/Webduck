@@ -40,6 +40,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from webduck.auth.manager import AuthManager
+from webduck.logging import log_error, log_warning
 from webduck.storage.engine import StorageEngine
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -60,10 +61,12 @@ def set_dependencies(auth: AuthManager, storage: StorageEngine) -> None:
 async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     """Verify admin JWT token."""
     if not auth_manager:
+        log_error("verify_admin: Auth manager not initialized")
         raise HTTPException(status_code=500, detail="Auth manager not initialized")
 
     username = auth_manager.verify_jwt_token(credentials.credentials)
     if not username:
+        log_warning("verify_admin: Invalid or expired token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
@@ -102,10 +105,10 @@ class PasswordRequest(BaseModel):
 async def login(req: LoginRequest) -> LoginResponse:
     """Login and get JWT token."""
     if not auth_manager:
+        log_error("login: Auth manager not initialized")
         raise HTTPException(status_code=500, detail="Auth manager not initialized")
 
     if not auth_manager.verify_user(req.username, req.password):
-        from webduck.logging import log_warning
         log_warning(f"Failed login attempt for user '{req.username}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -120,6 +123,7 @@ async def login(req: LoginRequest) -> LoginResponse:
 async def list_projects(username: str = Depends(verify_admin)) -> list[str]:
     """List all projects."""
     if not storage_engine:
+        log_error("list_projects: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
     return storage_engine.list_projects()
 
@@ -130,12 +134,14 @@ async def create_project(
 ) -> dict:
     """Create a new project."""
     if not storage_engine:
+        log_error("create_project: Storage engine not initialized")
         raise HTTPException(
             status_code=500,
             detail="Storage engine not initialized",
         )
 
     if not storage_engine.create_project(req.name):
+        log_warning(f"create_project: Project '{req.name}' already exists")
         raise HTTPException(
             status_code=400,
             detail="Project already exists",
@@ -151,6 +157,7 @@ async def create_project(
 async def delete_project(project: str, username: str = Depends(verify_admin)) -> dict:
     """Delete a project and all its databases."""
     if not storage_engine:
+        log_error("delete_project: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
     if not storage_engine.delete_project(project):
@@ -170,6 +177,7 @@ async def reorder_projects(
 ) -> dict:
     """Reorder projects."""
     if not storage_engine:
+        log_error("reorder_projects: Storage engine not initialized")
         raise HTTPException(
             status_code=500,
             detail="Storage engine not initialized",
@@ -187,6 +195,7 @@ async def reorder_projects(
 async def list_databases(project: str, username: str = Depends(verify_admin)) -> list[str]:
     """List all databases in a project."""
     if not storage_engine:
+        log_error("list_databases: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
     return storage_engine.list_databases(project)
 
@@ -197,12 +206,15 @@ async def create_database(
 ) -> dict:
     """Create a new database in a project."""
     if not storage_engine:
+        log_error("create_database: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
     if storage_engine.database_exists(project, req.name):
+        log_warning(f"create_database: Database '{req.name}' already exists in '{project}'")
         raise HTTPException(status_code=400, detail="Database already exists")
 
     if not storage_engine.create_database(project, req.name):
+        log_error(f"create_database: Failed to create database '{req.name}' in '{project}'")
         raise HTTPException(status_code=500, detail="Failed to create database")
 
     return {"success": True, "message": f"Database '{req.name}' created in project '{project}'"}
@@ -214,6 +226,7 @@ async def delete_database(
 ) -> dict:
     """Delete a database."""
     if not storage_engine:
+        log_error("delete_database: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
     if not storage_engine.delete_database(project, database):
@@ -235,6 +248,7 @@ async def set_database_password(
     project_auth = ProjectAuth(storage_engine.data_dir)
 
     if not project_auth.set_database_password(project, database, req.password, req.access_level):
+        log_error(f"set_database_password: Failed to set password for '{database}' in '{project}'")
         raise HTTPException(status_code=500, detail="Failed to set password")
 
     return {"success": True, "message": f"Password set for '{database}' ({req.access_level})"}
@@ -244,6 +258,7 @@ async def set_database_password(
 async def list_users(username: str = Depends(verify_admin)) -> list[str]:
     """List all admin users."""
     if not auth_manager:
+        log_error("list_users: Auth manager not initialized")
         raise HTTPException(status_code=500, detail="Auth manager not initialized")
     return auth_manager.list_users()
 
@@ -259,12 +274,15 @@ async def create_user(
 ) -> dict:
     """Create a new admin user."""
     if not auth_manager:
+        log_error("create_user: Auth manager not initialized")
         raise HTTPException(status_code=500, detail="Auth manager not initialized")
 
     if auth_manager.user_exists(req.username):
+        log_warning(f"create_user: User '{req.username}' already exists")
         raise HTTPException(status_code=400, detail="User already exists")
 
     if not auth_manager.create_user(req.username, req.password):
+        log_error(f"create_user: Failed to create user '{req.username}'")
         raise HTTPException(status_code=500, detail="Failed to create user")
 
     return {"success": True, "message": f"User '{req.username}' created"}
@@ -276,9 +294,11 @@ async def delete_user(
 ) -> dict:
     """Delete an admin user."""
     if not auth_manager:
+        log_error("delete_user: Auth manager not initialized")
         raise HTTPException(status_code=500, detail="Auth manager not initialized")
 
     if target_username == username:
+        log_warning(f"delete_user: User '{username}' attempted to delete themselves")
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
 
     if not auth_manager.delete_user(target_username):
