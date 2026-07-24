@@ -10,6 +10,11 @@
   <img src="https://img.shields.io/badge/version-1.0.0-FFD54F">
   <img src="https://img.shields.io/badge/license-MIT-green">
   <img src="https://img.shields.io/badge/python-3.11+-blue">
+
+  <br><br>
+  <a href="https://webduck.autumo.ch">Website</a> · 
+  <a href="https://github.com/autumoswitzerland/Webduck/issues">Issues</a> · 
+  <a href="https://github.com/autumoswitzerland/Webduck/blob/main/LICENSE">License</a>
 </div>
 
 ## Features
@@ -166,7 +171,7 @@ Databases without a password set are publicly accessible.
 # Login
 TOKEN=$(curl -s -X POST http://localhost:8998/admin/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"secret"}' | jq -r '.token')
+  -d '{"username":"admin","password":"secret"}' | jq -r '.access_token')
 
 # Create project + database
 curl -X POST http://localhost:8998/admin/projects \
@@ -188,9 +193,13 @@ curl -X POST http://localhost:8998/db/projects/myapp/databases/main/write \
   -H "Content-Type: application/json" \
   -d '{"sql":"CREATE TABLE users (id INT, name VARCHAR); INSERT INTO users VALUES (1, '\''Alice'\'');"}'
 
-# Read
+# Read (with password)
 curl -X POST http://localhost:8998/db/projects/myapp/databases/main/query \
   -H "X-Project-Key: myapp:dbpass" \
+  -d '{"sql":"SELECT * FROM users"}'
+
+# Read (without password — no header needed)
+curl -X POST http://localhost:8998/db/projects/myapp/databases/main/query \
   -d '{"sql":"SELECT * FROM users"}'
 ```
 
