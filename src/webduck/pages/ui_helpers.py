@@ -68,7 +68,7 @@ def make_drawer(_):
     """Shared left navigation drawer."""
     global _drawer
     with ui.left_drawer().classes("bg-[#1a1a1a]").props("bordered width=200") as _drawer:
-        
+
         """
         ui.item_label(_("navigation")).classes(
             "text-h6 text-bold q-mb-xs"
@@ -148,7 +148,7 @@ def make_footer(_):
             ui.label("|").style("font-size: 0.9em; color: #444;")
 
             ui.label("GitHub").style("color: #666; font-size: 0.9em; cursor: pointer;").on(
-                "click", lambda: ui.run_javascript('window.open("https://github.com/autumo/webduck", "_blank")')
+                "click", lambda: ui.run_javascript('window.open("https://github.com/autumoswitzerland/Webduck", "_blank")')
             )
 
             ui.label("|").style("font-size: 0.9em; color: #444;")
