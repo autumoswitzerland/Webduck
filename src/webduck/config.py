@@ -67,7 +67,7 @@ class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8998
     data_dir: Path = Path("data")
-    max_upload_mb: int = 5
+    max_upload_mb: int = 256
 
 
 class AuthConfig(BaseModel):

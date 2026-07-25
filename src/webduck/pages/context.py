@@ -29,7 +29,7 @@ auth: AuthManager | None = None
 project_auth: ProjectAuth | None = None
 version: str = ""
 icon: str = ""
-max_upload_mb: int = 5
+max_upload_mb: int = 256
 
 # External URLs displayed in the footer and navigation drawer.
 AUTUMO_URL = "https://autumo.ch"

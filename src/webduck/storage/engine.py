@@ -411,16 +411,72 @@ class StorageEngine:
     ) -> dict[str, Any]:
         """Import a CSV file into a table.
 
-        Uses DuckDB's `read_csv_auto()` which infers column types and handles
-        headers, quoted fields, and various delimiters automatically.  The
-        `CREATE OR REPLACE` means an existing table with the same name will
-        be silently overwritten — this is intentional for re-imports.
+        Uses DuckDB's ``read_csv_auto()`` which infers column types and
+        handles headers, quoted fields, and various delimiters
+        automatically.  For non-standard delimiters (e.g. ``$`` in
+        FAERS/Pharma TXT files) the delimiter is detected by counting
+        the most consistent separator in the first 50 lines and passed
+        explicitly via ``delim=``.
+
+        The ``CREATE OR REPLACE`` means an existing table with the same
+        name will be silently overwritten — this is intentional for
+        re-imports.
         """
         if not csv_path.exists():
             return {"success": False, "error": f"CSV file not found: {csv_path}"}
 
-        sql = f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM read_csv_auto('{csv_path}')"
+        delim = self._detect_delimiter(csv_path)
+        delim_param = f", delim='{delim}'" if delim else ""
+        sql = (
+            f"CREATE OR REPLACE TABLE {table_name} AS "
+            f"SELECT * FROM read_csv_auto('{csv_path}'{delim_param})"
+        )
         return self.execute_query(project, database, sql, read_only=False)
+
+    @staticmethod
+    def _detect_delimiter(csv_path: Path) -> str | None:
+        """Detect the most likely delimiter for a CSV/TXT file.
+
+        Reads the first 50 non-empty lines, counts column splits for
+        each candidate delimiter, and returns the one with the most
+        consistent (stable) column count.  Returns ``None`` for
+        standard CSV/TSV files where DuckDB's built-in detection
+        already works.
+        """
+        candidates = ["$", "|", ":", "~", ";"]
+        try:
+            with open(csv_path, "r", errors="replace") as f:
+                lines = [line.rstrip("\n\r") for _, line in zip(range(50), f)]
+        except Exception:
+            return None
+
+        lines = [l for l in lines if l.strip()]
+        if len(lines) < 2:
+            return None
+
+        best_delim = None
+        best_score = 0
+
+        for d in candidates:
+            counts = [line.count(d) for line in lines]
+            if all(c == 0 for c in counts):
+                continue
+            # Use the median column count as target.
+            col_counts = [c + 1 for c in counts]
+            col_counts.sort()
+            median = col_counts[len(col_counts) // 2]
+            if median < 2:
+                continue
+            # Score = how many lines match the median column count.
+            matches = sum(1 for c in col_counts if c == median)
+            score = matches / len(col_counts)
+            if score > best_score or (score == best_score and
+                                      best_delim is None):
+                best_score = score
+                best_delim = d
+
+        # Only return if confidence is high (> 80% consistent).
+        return best_delim if best_score > 0.8 else None
 
     def export_csv(
         self,

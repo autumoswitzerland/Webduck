@@ -265,6 +265,9 @@ msgstr "File too large (max {0} MB)"
 msgid "file_loaded"
 msgstr "Loaded: %s"
 
+msgid "no_file_loaded"
+msgstr "No file uploaded"
+
 msgid "statement_executed"
 msgstr "%d statement executed successfully"
 

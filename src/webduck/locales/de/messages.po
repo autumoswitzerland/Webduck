@@ -265,6 +265,9 @@ msgstr "Datei zu gross (max {0} MB)"
 msgid "file_loaded"
 msgstr "Geladen: %s"
 
+msgid "no_file_loaded"
+msgstr "Keine Datei hochgeladen"
+
 msgid "statement_executed"
 msgstr "%d Anweisung erfolgreich ausgeführt"
 

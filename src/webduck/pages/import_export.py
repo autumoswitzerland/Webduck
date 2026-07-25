@@ -11,10 +11,10 @@
 
 """Import/Export page — CSV import via drag & drop, CSV export by table selection.
 
-**Import:** The user specifies a target table name and drags a CSV file
-onto the drop zone (or clicks to open a file picker).  The file is read
-entirely client-side via FileReader, stored in a JS global, then sent
-to the server as text for DuckDB's ``read_csv_auto`` import.
+**Import:** The user specifies a target table name and drags a file
+onto the upload zone (or clicks to open a file picker).  The file is
+sent directly to the server via HTTP multipart (no WebSocket limit),
+saved to a temp file, and imported via DuckDB's ``read_csv_auto``.
 
 **Export:** The user selects a table from the chosen database; the
 server writes it to a temp CSV file, which is then base64-encoded and
@@ -109,10 +109,8 @@ def register():
                 update_databases()
 
         # ── Card 2: CSV Import ──────────────────────────────
-        # Drag-and-drop zone for CSV files.  The file is read entirely
-        # client-side via FileReader and stored in a JS global; the
-        # server receives the text content, writes it to a temp file,
-        # and passes it to DuckDB's read_csv_auto.
+        # File upload via HTTP multipart (NiceGUI ui.upload).
+        # No WebSocket size limit — files go directly to the server.
         with ui.card().classes("w-full q-mt-sm"):
             ui.label(_("csv_import")).classes(
                 "text-h5"
@@ -122,27 +120,55 @@ def register():
                 _("table_name"),
             ).classes("w-60 q-mb-sm")
 
-            dsf = _("drop_csv_file")
-            # HTML drop zone: dashed border, hidden file input, info div.
-            drop_html = f"""
-            <div id="csv-drop-zone" style="
-                border: 2px dashed #444;
-                border-radius: 8px;
-                padding: 32px;
-                text-align: center;
-                color: #888;
-                cursor: pointer;
-                margin-bottom: 12px;
-            ">
-                {dsf}
-                <input type="file" id="csv-file-input"
-                    accept=".csv,.txt" style="display:none;">
-                <div id="csv-file-info"
-                    style="margin-top: 8px; font-size: 0.9em;">
-                </div>
-            </div>
-            """
-            ui.html(drop_html)
+            # Track the uploaded temp file path for the import step.
+            _uploaded_file = [None]
+            _uploaded_name = [None]
+
+            async def on_upload(e):
+                """Handle file upload via HTTP multipart.
+
+                Saves the uploaded file content to a temp file on disk
+                so DuckDB can import it directly.
+                """
+                import tempfile
+                tmp = tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".upload"
+                )
+                tmp.close()
+                await e.file.save(tmp.name)
+                _uploaded_file[0] = tmp.name
+                _uploaded_name[0] = e.file.name
+
+            upload = ui.upload(
+                on_upload=on_upload,
+                auto_upload=True,
+                max_file_size=ctx.max_upload_mb * 1024 * 1024,
+                label=_("drop_csv_file"),
+                multiple=False,
+            ).classes("w-full")
+
+            # Style the QUploader to match our dark theme.
+            ui.add_css("""
+                .q-uploader__header {
+                    background: #1a1a1a !important;
+                }
+                .q-uploader__list {
+                    background: #1a1a1a !important;
+                    color: #E0E0E0 !important;
+                }
+                .q-uploader__list scroll {
+                    background: #1a1a1a !important;
+                }
+                .q-uploader {
+                    border: 2px dashed #444 !important;
+                    border-radius: 8px !important;
+                    box-shadow: none !important;
+                }
+                .q-uploader__dnd {
+                    background: rgba(255,213,79,0.05) !important;
+                    border-color: #FFD54F !important;
+                }
+            """)
 
             # Hint: supported formats, delimiter, max file size.
             ui.label(
@@ -151,91 +177,16 @@ def register():
                 f"color: {TEXT_DIM}; font-size: 0.85em;"
             )
 
-            # Client-side JS: click opens file picker, drag highlights the
-            # zone, drop reads the file as text and stores it for the server.
-            max_bytes = ctx.max_upload_mb * 1024 * 1024
-            js_setup = f"""
-            setTimeout(function() {{
-                var zone = document.getElementById('csv-drop-zone');
-                var fileInput = document.getElementById('csv-file-input');
-                if (!zone || !fileInput) return;
-
-                // Click anywhere in the zone to open the file picker.
-                zone.addEventListener('click', function() {{
-                    fileInput.click();
-                }});
-
-                // Visual feedback during drag-over.
-                zone.addEventListener('dragover', function(e) {{
-                    e.preventDefault();
-                    zone.style.borderColor = '#FFD54F';
-                }});
-
-                zone.addEventListener('dragleave', function(e) {{
-                    e.preventDefault();
-                    zone.style.borderColor = '#444';
-                }});
-
-                // On drop: validate size, read as text, store in JS global.
-                zone.addEventListener('drop', function(e) {{
-                    e.preventDefault();
-                    zone.style.borderColor = '#444';
-                    var files = e.dataTransfer.files;
-                    if (files.length > 0) {{
-                        var file = files[0];
-                        if (file.size > {max_bytes}) {{
-                            alert('{_("file_too_large").format(ctx.max_upload_mb)}');
-                            return;
-                        }}
-                        var reader = new FileReader();
-                        reader.onload = function(ev) {{
-                            window._csvUploadContent = ev.target.result;
-                            var info = document.getElementById('csv-file-info');
-                            if (info) {{
-                                info.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
-                                info.style.color = '#66BB6A';
-                            }}
-                            zone.style.borderColor = '#66BB6A';
-                        }};
-                        reader.readAsText(file);
-                    }}
-                }});
-
-                // Also handle click-to-upload via the hidden file input.
-                fileInput.addEventListener('change', function(e) {{
-                    var file = e.target.files[0];
-                    if (file) {{
-                        if (file.size > {max_bytes}) {{
-                            alert('{_("file_too_large").format(ctx.max_upload_mb)}');
-                            return;
-                        }}
-                        var reader = new FileReader();
-                        reader.onload = function(ev) {{
-                            window._csvUploadContent = ev.target.result;
-                            var info = document.getElementById('csv-file-info');
-                            if (info) {{
-                                info.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
-                                info.style.color = '#66BB6A';
-                            }}
-                            zone.style.borderColor = '#66BB6A';
-                        }};
-                        reader.readAsText(file);
-                    }}
-                }});
-            }}, 100);
-            """
-            ui.run_javascript(js_setup)
-
             import_result_area = ui.card().classes("w-full mt-2 shadow-none")
 
             async def execute_import():
                 """Execute the CSV import workflow.
 
                 1. Validate that a database and table name are selected.
-                2. Retrieve the CSV text from the JS global.
+                2. Check that a file was uploaded.
                 3. Show a spinner dialog while the import runs.
-                4. Write the text to a temp file, call ``import_csv``
-                   in a background thread, then clean up the temp file.
+                4. Call ``import_csv`` in a background thread, then
+                   clean up the temp file.
                 5. Display success/error and reset the upload zone on success.
                 """
                 if not database_select.value:
@@ -246,10 +197,7 @@ def register():
                     ui.notify(_("table_name_required"), type="warning")
                     return
 
-                content = await ui.run_javascript(
-                    "window._csvUploadContent || ''", timeout=3,
-                )
-                if not content:
+                if not _uploaded_file[0]:
                     ui.notify(_("no_file_loaded"), type="warning")
                     return
 
@@ -264,25 +212,19 @@ def register():
                 dlg.open()
 
                 try:
-                    # Write CSV content to a temp file for the storage engine.
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(
-                        mode="w", suffix=".csv", delete=False
-                    ) as tmp:
-                        tmp.write(content)
-                        tmp_path = tmp.name
-
                     # Run the import in a background thread to keep the UI responsive.
                     result = await asyncio.to_thread(
                         ctx.storage.import_csv,
                         project_select.value,
                         database_select.value,
                         table_name_input.value,
-                        Path(tmp_path),
+                        Path(_uploaded_file[0]),
                     )
 
                     # Clean up the temp file regardless of success/failure.
-                    Path(tmp_path).unlink(missing_ok=True)
+                    Path(_uploaded_file[0]).unlink(missing_ok=True)
+                    _uploaded_file[0] = None
+                    _uploaded_name[0] = None
                 except Exception as e:
                     from webduck.logging import log_error
                     log_error(f"CSV import error [{project_select.value}/{database_select.value}]: {e}")
@@ -295,17 +237,8 @@ def register():
                     import_result_area.clear()
                     if result.get("success"):
                         ui.label(_("import_success")).style("color: #66BB6A")
-                        # Clear the JS global and reset the drop zone visuals.
-                        await ui.run_javascript(
-                            """
-                            window._csvUploadContent = "";
-                            var info = document.getElementById('csv-file-info');
-                            if (info) { info.textContent = ''; }
-                            var zone = document.getElementById('csv-drop-zone');
-                            if (zone) { zone.style.borderColor = '#444'; }
-                            """,
-                            timeout=3,
-                        )
+                        # Reset the upload component.
+                        upload.reset()
                     else:
                         ui.label(result.get("error", "Import failed")).style("color: #f64337")
 
