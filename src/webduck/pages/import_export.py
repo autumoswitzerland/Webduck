@@ -30,6 +30,7 @@ from nicegui import ui
 from webduck.pages import context as ctx
 from webduck.pages.context import (
     BG_CARD,
+    TEXT_DIM,
     YELLOW_LIGHT,
 )
 from webduck.pages.ui_helpers import (
@@ -142,6 +143,13 @@ def register():
             </div>
             """
             ui.html(drop_html)
+
+            # Hint: supported formats, delimiter, max file size.
+            ui.label(
+                _("import_hint").format(ctx.max_upload_mb)
+            ).style(
+                f"color: {TEXT_DIM}; font-size: 0.85em;"
+            )
 
             # Client-side JS: click opens file picker, drag highlights the
             # zone, drop reads the file as text and stores it for the server.

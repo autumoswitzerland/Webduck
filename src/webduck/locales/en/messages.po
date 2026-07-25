@@ -347,3 +347,6 @@ msgstr "Import CSV"
 
 msgid "execute_export"
 msgstr "Export CSV"
+
+msgid "import_hint"
+msgstr "Supported formats: CSV, TXT. Delimiter is auto-detected. Max file size: {0} MB."

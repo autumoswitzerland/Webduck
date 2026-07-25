@@ -347,3 +347,6 @@ msgstr "CSV importieren"
 
 msgid "execute_export"
 msgstr "CSV exportieren"
+
+msgid "import_hint"
+msgstr "Unterstützte Formate: CSV, TXT. Trennzeichen wird automatisch erkannt. Maximale Dateigrösse: {0} MB."
