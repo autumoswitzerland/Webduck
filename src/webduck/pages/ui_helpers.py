@@ -164,27 +164,22 @@ def make_footer(_):
 
             ui.label("|").style("color: #444;")
 
-            # -- API link: opens /docs (Swagger UI) in a new tab.
-            ui.label("API").style("color: #565656; font-size: 0.9em; cursor: pointer;").on(
-                "click", lambda: ui.run_javascript('window.open("/docs", "_blank")')
+            # -- Landing page.
+            ui.label("Website").style("color: #666; font-size: 0.9em; cursor: pointer;").on(
+                "click", lambda: ui.run_javascript('window.open("https://webduck.autumo.ch/", "_blank")')
             ).on("mouseover", lambda e: e.sender.style("color: #444")).on(
-                "mouseout", lambda e: e.sender.style("color: #565656")
+                "mouseout", lambda e: e.sender.style("color: #666")
             )
 
             ui.label("|").style("font-size: 0.9em; color: #444;")
-
-            # -- Docs link: opens the project documentation site.
-            ui.link(
-                "Docs",
-                ctx.DOCS_URL,
-                new_tab=True
-            ).style("color: #666; font-size: 0.9em; text-decoration: none;")
 
             ui.label("|").style("font-size: 0.9em; color: #444;")
 
             # -- GitHub link: opens the source repository.
             ui.label("GitHub").style("color: #666; font-size: 0.9em; cursor: pointer;").on(
                 "click", lambda: ui.run_javascript('window.open("https://github.com/autumoswitzerland/Webduck", "_blank")')
+            ).on("mouseover", lambda e: e.sender.style("color: #444")).on(
+                "mouseout", lambda e: e.sender.style("color: #666")
             )
 
             ui.label("|").style("font-size: 0.9em; color: #444;")
