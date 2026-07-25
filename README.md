@@ -17,15 +17,6 @@
   <a href="https://github.com/autumoswitzerland/Webduck/blob/main/LICENSE">License</a>
 </div>
 
-## Web UI
-
-<table>
-<tr>
-<td align="center"><strong>Projects</strong><br><a href="src/webduck/static/screen_projects.webp"><img src="src/webduck/static/screen_projects.webp" width="450"></a></td>
-<td align="center"><strong>Browse View</strong><br><a href="src/webduck/static/screen_browse.webp"><img src="src/webduck/static/screen_browse.webp" width="450"></a></td>
-</tr>
-</table>
-
 ## Features
 
 - **DuckDB storage engine** with file-locking for safe concurrent access
@@ -44,6 +35,15 @@
 - **FK dependency hints** — DROP errors include referenced tables and constraint info
 - **Docker** support out of the box
 - **YAML configuration**
+
+## Web UI
+
+<table>
+<tr>
+<td align="center"><strong>Projects</strong><br><a href="src/webduck/static/screen_projects.webp"><img src="src/webduck/static/screen_projects.webp" width="450"></a></td>
+<td align="center"><strong>Browse View</strong><br><a href="src/webduck/static/screen_browse.webp"><img src="src/webduck/static/screen_browse.webp" width="450"></a></td>
+</tr>
+</table>
 
 ## Installation
 
