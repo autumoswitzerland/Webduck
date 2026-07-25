@@ -113,7 +113,7 @@ def make_drawer(_):
 
 def make_footer(_):
     """Shared footer for all pages."""
-    from webduck.pages.context import AUTUMO_URL, YELLOW_DARKER
+    from webduck.pages.context import AUTUMO_URL, DONATE_URL, YELLOW_DARKER
     with ui.footer().classes("bg-[#040d12] items-center").style("border-top: 0.9px solid #0c2736;"):
         with ui.row().classes("items-center gap-4 w-full justify-center"):
 
@@ -149,6 +149,14 @@ def make_footer(_):
 
             ui.label("GitHub").style("color: #666; font-size: 0.9em; cursor: pointer;").on(
                 "click", lambda: ui.run_javascript('window.open("https://github.com/autumoswitzerland/Webduck", "_blank")')
+            )
+
+            ui.label("|").style("font-size: 0.9em; color: #444;")
+
+            ui.label("Donate").style("color: #666; font-size: 0.9em; cursor: pointer;").on(
+                "click", lambda: ui.run_javascript(f'window.open("{DONATE_URL}", "_blank")')
+            ).on("mouseover", lambda e: e.sender.style("color: #444")).on(
+                "mouseout", lambda e: e.sender.style("color: #666")
             )
 
             ui.label("|").style("font-size: 0.9em; color: #444;")

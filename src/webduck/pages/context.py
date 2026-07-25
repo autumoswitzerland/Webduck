@@ -26,6 +26,7 @@ max_upload_mb: int = 5
 
 AUTUMO_URL = "https://autumo.ch"
 DOCS_URL = "https://webduck.autumo.ch"
+DONATE_URL = "https://www.paypal.com/ncp/payment/NZ4CC6SVF9HN8"
 
 # Theme colors
 YELLOW = "#FFD54F"
