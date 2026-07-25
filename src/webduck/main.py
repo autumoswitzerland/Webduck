@@ -243,8 +243,8 @@ def setup_app(cfg: WebDuckConfig) -> FastAPI:
     )
 
     # --- Static files (icons, CSS, JS) ---
-    # Resolve relative to the package source tree (src/webduck → ../../static)
-    static_dir = Path(__file__).resolve().parent.parent.parent / "static"
+    # Static files live inside the package (src/webduck/static/)
+    static_dir = Path(__file__).resolve().parent / "static"
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
@@ -460,7 +460,7 @@ def main():
         favicon_path = None
         if cfg.icon:
             candidate = (
-                Path(__file__).resolve().parent.parent.parent
+                Path(__file__).resolve().parent
                 / "static" / cfg.icon
             )
             if candidate.exists() and candidate.suffix == ".svg":

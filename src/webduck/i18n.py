@@ -60,11 +60,11 @@ DEFAULT_LANGUAGE = "en"
 # Languages with PO files under ``locales/<lang>/messages.po``.
 SUPPORTED_LANGUAGES = ["en", "de", "fr"]
 
-# Locales directory — resolved relative to the package source tree.
+# Locales directory — inside the package (src/webduck/locales/).
 # Layout:  locales/en/LC_MESSAGES/messages.mo
 #          locales/de/messages.po
 #          locales/de/LC_MESSAGES/messages.mo
-LOCALES_DIR = Path(__file__).parent.parent.parent / "locales"
+LOCALES_DIR = Path(__file__).parent / "locales"
 
 
 def _ensure_mo_files() -> None:

@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="static/icon.svg" width="128">
+  <img src="src/webduck/static/icon.svg" width="128">
   <h1>WebDuck</h1>
 
   A self-hosted DuckDB-as-a-Service server with REST API and Web UI.

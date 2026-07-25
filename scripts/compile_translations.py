@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Compile PO files to MO files."""
 
-import os
-import sys
 from pathlib import Path
 
 def compile_po_files(locales_dir: Path) -> None:
@@ -34,5 +32,5 @@ def compile_po_files(locales_dir: Path) -> None:
 
 
 if __name__ == "__main__":
-    locales_dir = Path(__file__).parent.parent / "locales"
+    locales_dir = Path(__file__).parent.parent / "src" / "webduck" / "locales"
     compile_po_files(locales_dir)

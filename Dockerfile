@@ -10,8 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy project files
 COPY pyproject.toml .
 COPY src/ src/
-COPY static/ static/
-COPY locales/ locales/
 COPY entrypoint.sh /entrypoint.sh
 
 # Install the package
