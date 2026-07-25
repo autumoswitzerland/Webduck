@@ -9,7 +9,18 @@
 # of this software.
 # ------------------------------------------------------------------------------
 
-"""Browse page — database object tree + result table with infinite scroll."""
+"""Browse page — database object tree + result table with infinite scroll.
+
+The left panel shows a tree of database objects (tables, views, indexes,
+sequences, macros) queried from DuckDB system tables.  Selecting a table
+or view displays its rows in a Quasar table with:
+
+- **Infinite scroll** — initially loads 100 rows, fetches more as the
+  user scrolls near the bottom (polling via a UI timer).
+- **Inline cell editing** — double-click any cell to edit it; the value
+  is validated against the column's DuckDB type and written back via a
+  parameterized UPDATE with CAST.
+"""
 
 import asyncio
 import json
@@ -35,6 +46,9 @@ from webduck.pages.ui_helpers import (
 )
 from webduck.pages.user_prefs import get_user_pref, set_user_pref
 
+# DuckDB types that allow inline cell editing.  Complex types like
+# STRUCT, LIST, MAP, etc. are excluded because their text representation
+# is ambiguous without a full parser.
 _VALID_CAST = {
     "VARCHAR", "INTEGER", "BIGINT",
     "SMALLINT", "TINYINT", "DOUBLE",
@@ -44,6 +58,7 @@ _VALID_CAST = {
 
 
 def register():
+    """Register the ``/browse`` page route with NiceGUI."""
     from webduck.i18n import get_user_translator
 
     @ui.page("/browse")
@@ -52,6 +67,7 @@ def register():
         apply_dark_theme()
         ui.page_title(f"WebDuck {ctx.version} — Browse")
 
+        # Auth guard: redirect to login if no session token exists.
         if "token" not in nicegui_app.storage.user:
             ui.navigate.to("/login")
             return
@@ -60,6 +76,7 @@ def register():
         make_drawer(_)
         make_footer(_)
 
+        # -- Project & Database selection card (shared with query page pattern).
         with ui.card().classes("w-full"):
             ui.label(_("browse")).classes("text-h5").style(
                 f"color: {YELLOW_LIGHT}"
@@ -83,6 +100,11 @@ def register():
                 ).classes("w-40")
 
                 def update_databases():
+                    """Refresh the database dropdown when the project changes.
+
+                    Restores the previously selected database if it still
+                    exists in the new project, otherwise selects the first one.
+                    """
                     if project_select.value:
                         databases = ctx.storage.list_databases(
                             project_select.value
@@ -114,6 +136,7 @@ def register():
                 update_databases()
 
         # ── Tree + Result ──────────────────────────────────────
+        # Two-column layout: left = object tree (fixed width), right = result table.
         with ui.row().classes("w-full q-mt-sm gap-4"):
             tree_container = ui.card().classes(
                 "col"
@@ -123,6 +146,13 @@ def register():
             result_container = ui.card().classes("col")
 
         def load_tree():
+            """Query DuckDB system tables and build the object tree.
+
+            For each object type (tables, views, indexes, sequences,
+            macros) a SQL query is run against the corresponding
+            ``duckdb_*()`` table function.  Results are grouped under
+            typed parent nodes with appropriate icons.
+            """
             tree_container.clear()
             result_container.clear()
 
@@ -138,6 +168,7 @@ def register():
 
                 tree_data = {}
 
+                # Query each DuckDB system table for object names.
                 for obj_type, icon, query in [
                     ("tables", "table_chart",
                      f"SELECT table_name FROM duckdb_tables()"
@@ -204,10 +235,20 @@ def register():
                     )
                     return
 
+                # Timers for infinite scroll polling and cell-edit detection.
+                # Stored in lists so nested closures can mutate them.
                 _browse_timer = [None]
                 _edit_timer = [None]
 
                 def on_tree_click(e):
+                    """Handle tree node selection.
+
+                    Parses the node ID as ``obj_type/name``.  For tables
+                    and views, loads rows with infinite scroll and enables
+                    inline editing.  For indexes/sequences/macros, loads
+                    metadata from DuckDB system tables.
+                    """
+                    # Cancel any active timers from a previous selection.
                     if _browse_timer[0]:
                         _browse_timer[0].cancel()
                         _browse_timer[0] = None
@@ -238,7 +279,9 @@ def register():
                             "text-h6 q-mb-sm"
                         ).style(f"color: {YELLOW}")
 
+                        # ── Tables & Views: paginated row display ─────
                         if obj_type in ("tables", "views"):
+                            # Get total row count for the status label.
                             try:
                                 count_res = ctx.storage.execute_query(
                                     proj, db,
@@ -261,6 +304,7 @@ def register():
                                 else 0
                             )
 
+                            # Load the first page of rows.
                             q = (
                                 f'SELECT * FROM "{name}"'
                                 f" LIMIT {BROWSE_PAGE_SIZE}"
@@ -299,12 +343,14 @@ def register():
                                 )
                                 return
 
+                            # Convert raw rows to dicts keyed by column name.
                             all_rows = [
                                 dict(zip(columns, row))
                                 for row in rows_raw
                             ]
                             has_more = total > BROWSE_PAGE_SIZE
 
+                            # Status label showing total row count.
                             st = (
                                 _("total_rows") % total
                                 if total > 0
@@ -315,6 +361,7 @@ def register():
                                 f"font-size: 0.85em;"
                             )
 
+                            # Render the Quasar table with flat bordered style.
                             tbl = ui.table(
                                 columns=[
                                     {
@@ -332,12 +379,22 @@ def register():
                                 "flat bordered"
                             )
 
+                            # ── Infinite scroll setup ────────────────
+                            # If the table has more rows than one page,
+                            # set up a polling timer that fetches the next
+                            # page when the user scrolls near the bottom.
                             if has_more:
                                 offset = [BROWSE_PAGE_SIZE]
                                 loading = [False]
                                 done = [False]
 
                                 async def load_more():
+                                    """Fetch the next page of rows if the user scrolled near the bottom.
+
+                                    Uses a JS flag (``_webduckNeedMore``) set by a scroll
+                                    event listener.  The flag avoids unnecessary server
+                                    calls when the user hasn't scrolled far enough.
+                                    """
                                     if loading[0] or done[0]:
                                         return
                                     loading[0] = True
@@ -388,6 +445,8 @@ def register():
                                                     new_offset
                                                     + len(new_rows)
                                                 )
+                                                # Stop loading if we've fetched all rows or
+                                                # the last page was smaller than PAGE_SIZE.
                                                 if (
                                                     len(all_rows)
                                                     >= total
@@ -403,10 +462,13 @@ def register():
                                     finally:
                                         loading[0] = False
 
+                                # Poll every 400ms for scroll proximity.
                                 _browse_timer[0] = ui.timer(
                                     0.4, load_more, active=True
                                 )
 
+                                # Inject JS to detect when the user scrolls near the
+                                # bottom of the table container and set the flag.
                                 ui.run_javascript("""
                                 setTimeout(function() {
                                     var tables = document
@@ -435,6 +497,9 @@ def register():
                                 """)
 
                             # ── Cell editing ──────────────
+                            # Fetch column types from information_schema to
+                            # determine which columns are editable and how
+                            # to validate new values.
                             type_res = ctx.storage.execute_query(
                                 proj, db,
                                 "SELECT column_name, data_type "
@@ -447,6 +512,7 @@ def register():
                                 for row in type_res["rows"]:
                                     col_types[row[0]] = row[1]
 
+                            # CSS highlight on cell hover to indicate editability.
                             ui.add_css("""
                                 .q-table tbody td:hover {
                                     background: rgba(255,213,79,0.1)
@@ -455,8 +521,11 @@ def register():
                                 }
                             """)
 
+                            # Use the first column as the primary key for UPDATE statements.
                             pk_col = columns[0] if columns else None
                             if pk_col and pk_col in col_types:
+                                # JS double-click handler: captures the clicked row index,
+                                # column name, and old value, storing them in a global.
                                 ui.run_javascript("""
                                 setTimeout(function() {
                                     var ts = document
@@ -498,6 +567,13 @@ def register():
                                 """)
 
                                 async def _check_edit():
+                                    """Poll for double-click edit events.
+
+                                    Reads the ``_eci`` JS global set by the double-click
+                                    handler.  If present, validates the column type, opens
+                                    an edit dialog, and (on save) executes a parameterized
+                                    UPDATE with CAST to ensure type safety.
+                                    """
                                     info = (
                                         await ui.run_javascript(
                                             "window._eci || null",
@@ -520,6 +596,7 @@ def register():
                                         )
                                         return
                                     ct = col_types[cn]
+                                    # Only allow editing types in the whitelist.
                                     if ct not in _VALID_CAST:
                                         ui.notification(
                                             "Column type not "
@@ -552,6 +629,16 @@ def register():
                                             )
 
                                             async def _save():
+                                                """Validate the new value against the column type and execute UPDATE.
+
+                                                Type-specific regex validation:
+                                                - INTEGER/BIGINT/SMALLINT/TINYINT: optional minus + digits
+                                                - DOUBLE/FLOAT/DECIMAL: optional minus + digits + optional decimal
+                                                - BOOLEAN: true/false/1/0
+                                                - DATE: YYYY-MM-DD
+                                                - TIMESTAMP: YYYY-MM-DD HH:MM or YYYY-MM-DDTHH:MM
+                                                - VARCHAR/UUID: any string (no validation)
+                                                """
                                                 nv = inp.value
                                                 if nv == ov:
                                                     dlg.close()
@@ -628,6 +715,7 @@ def register():
                                                         type="warning",
                                                     )
                                                     return
+                                                # Parameterized UPDATE with CAST for type safety.
                                                 sql = (
                                                     f'UPDATE "{name}"'
                                                     f' SET "{cn}"'
@@ -654,6 +742,7 @@ def register():
                                                     )
                                                 )
                                                 if r.get("success"):
+                                                    # Update the in-memory row and refresh the table.
                                                     all_rows[ri][
                                                         cn
                                                     ] = nv
@@ -686,12 +775,16 @@ def register():
                                             )
                                     dlg.open()
 
+                                # Poll every 500ms for double-click edit events.
                                 _edit_timer[0] = ui.timer(
                                     0.5,
                                     _check_edit,
                                     active=True,
                                 )
 
+                        # ── Indexes / Sequences / Macros: metadata display ──
+                        # These object types show read-only metadata from
+                        # DuckDB system tables rather than row data.
                         else:
                             if obj_type == "indexes":
                                 q = (
@@ -755,6 +848,7 @@ def register():
                                 )
                                 return
 
+                            # Flatten list values (e.g. parameter lists) to comma-separated strings.
                             rows = [
                                 {
                                     k: (
@@ -785,6 +879,7 @@ def register():
                                 "flat bordered"
                             )
 
+                # Render the NiceGUI tree widget with on_select callback.
                 ui.tree(
                     list(tree_data.values()),
                     on_select=on_tree_click,
@@ -792,6 +887,7 @@ def register():
                     f"color: {TEXT_SOFT}; font-size: 0.85em;"
                 ).classes("q-tree--dense")
 
+        # Rebuild the tree whenever the project or database changes.
         project_select.on_value_change(load_tree)
         database_select.on_value_change(load_tree)
         load_tree()

@@ -9,7 +9,17 @@
 # of this software.
 # ------------------------------------------------------------------------------
 
-"""Import/Export page — CSV import via drag & drop, CSV export by table selection."""
+"""Import/Export page — CSV import via drag & drop, CSV export by table selection.
+
+**Import:** The user specifies a target table name and drags a CSV file
+onto the drop zone (or clicks to open a file picker).  The file is read
+entirely client-side via FileReader, stored in a JS global, then sent
+to the server as text for DuckDB's ``read_csv_auto`` import.
+
+**Export:** The user selects a table from the chosen database; the
+server writes it to a temp CSV file, which is then base64-encoded and
+triggered as a browser download via a data URL.
+"""
 
 import asyncio
 from pathlib import Path
@@ -32,6 +42,7 @@ from webduck.pages.user_prefs import get_user_pref, set_user_pref
 
 
 def register():
+    """Register the ``/import`` page route with NiceGUI."""
     from webduck.i18n import get_user_translator
 
     @ui.page("/import")
@@ -40,6 +51,7 @@ def register():
         apply_dark_theme()
         ui.page_title(f"WebDuck {ctx.version} — Import/Export")
 
+        # Auth guard: redirect to login if no session token exists.
         if "token" not in nicegui_app.storage.user:
             ui.navigate.to("/login")
             return
@@ -49,6 +61,8 @@ def register():
         make_footer(_)
 
         # ── Card 1: Project & Database Selection ────────────
+        # Shared dropdowns for both import and export sections.
+        # Selections are persisted per-user via the user_prefs system.
         with ui.card().classes("w-full"):
             ui.label(_("import_export")).classes(
                 "text-h5"
@@ -69,6 +83,11 @@ def register():
                 ).classes("w-40")
 
                 def update_databases():
+                    """Refresh the database dropdown when the project changes.
+
+                    Restores the previously selected database if it still
+                    exists in the new project, otherwise selects the first one.
+                    """
                     if project_select.value:
                         databases = ctx.storage.list_databases(
                             project_select.value
@@ -89,6 +108,10 @@ def register():
                 update_databases()
 
         # ── Card 2: CSV Import ──────────────────────────────
+        # Drag-and-drop zone for CSV files.  The file is read entirely
+        # client-side via FileReader and stored in a JS global; the
+        # server receives the text content, writes it to a temp file,
+        # and passes it to DuckDB's read_csv_auto.
         with ui.card().classes("w-full q-mt-sm"):
             ui.label(_("csv_import")).classes(
                 "text-h5"
@@ -99,6 +122,7 @@ def register():
             ).classes("w-60 q-mb-sm")
 
             dsf = _("drop_csv_file")
+            # HTML drop zone: dashed border, hidden file input, info div.
             drop_html = f"""
             <div id="csv-drop-zone" style="
                 border: 2px dashed #444;
@@ -119,6 +143,8 @@ def register():
             """
             ui.html(drop_html)
 
+            # Client-side JS: click opens file picker, drag highlights the
+            # zone, drop reads the file as text and stores it for the server.
             max_bytes = ctx.max_upload_mb * 1024 * 1024
             js_setup = f"""
             setTimeout(function() {{
@@ -126,10 +152,12 @@ def register():
                 var fileInput = document.getElementById('csv-file-input');
                 if (!zone || !fileInput) return;
 
+                // Click anywhere in the zone to open the file picker.
                 zone.addEventListener('click', function() {{
                     fileInput.click();
                 }});
 
+                // Visual feedback during drag-over.
                 zone.addEventListener('dragover', function(e) {{
                     e.preventDefault();
                     zone.style.borderColor = '#FFD54F';
@@ -140,6 +168,7 @@ def register():
                     zone.style.borderColor = '#444';
                 }});
 
+                // On drop: validate size, read as text, store in JS global.
                 zone.addEventListener('drop', function(e) {{
                     e.preventDefault();
                     zone.style.borderColor = '#444';
@@ -164,6 +193,7 @@ def register():
                     }}
                 }});
 
+                // Also handle click-to-upload via the hidden file input.
                 fileInput.addEventListener('change', function(e) {{
                     var file = e.target.files[0];
                     if (file) {{
@@ -191,6 +221,15 @@ def register():
             import_result_area = ui.card().classes("w-full mt-2 shadow-none")
 
             async def execute_import():
+                """Execute the CSV import workflow.
+
+                1. Validate that a database and table name are selected.
+                2. Retrieve the CSV text from the JS global.
+                3. Show a spinner dialog while the import runs.
+                4. Write the text to a temp file, call ``import_csv``
+                   in a background thread, then clean up the temp file.
+                5. Display success/error and reset the upload zone on success.
+                """
                 if not database_select.value:
                     ui.notify(_("select_database"), type="warning")
                     return
@@ -206,6 +245,7 @@ def register():
                     ui.notify(_("no_file_loaded"), type="warning")
                     return
 
+                # Show a modal spinner while the import runs.
                 with ui.dialog() as dlg, ui.card().style(
                     f"background: {BG_CARD};"
                     " min-width: 320px;"
@@ -216,6 +256,7 @@ def register():
                 dlg.open()
 
                 try:
+                    # Write CSV content to a temp file for the storage engine.
                     import tempfile
                     with tempfile.NamedTemporaryFile(
                         mode="w", suffix=".csv", delete=False
@@ -223,6 +264,7 @@ def register():
                         tmp.write(content)
                         tmp_path = tmp.name
 
+                    # Run the import in a background thread to keep the UI responsive.
                     result = await asyncio.to_thread(
                         ctx.storage.import_csv,
                         project_select.value,
@@ -231,6 +273,7 @@ def register():
                         Path(tmp_path),
                     )
 
+                    # Clean up the temp file regardless of success/failure.
                     Path(tmp_path).unlink(missing_ok=True)
                 except Exception as e:
                     from webduck.logging import log_error
@@ -239,10 +282,12 @@ def register():
                 finally:
                     dlg.close()
 
+                # Display result and reset the upload zone on success.
                 with import_result_area:
                     import_result_area.clear()
                     if result.get("success"):
                         ui.label(_("import_success")).style("color: #66BB6A")
+                        # Clear the JS global and reset the drop zone visuals.
                         await ui.run_javascript(
                             """
                             window._csvUploadContent = "";
@@ -261,6 +306,9 @@ def register():
             ).props("outline color=amber").classes("mt-2 border-button")
 
         # ── Card 3: CSV Export ──────────────────────────────
+        # Select a table and download its contents as a CSV file.
+        # The export runs server-side; the result is sent to the
+        # browser as a base64 data URL for automatic download.
         with ui.card().classes("w-full q-mt-sm"):
             ui.label(_("csv_export")).classes(
                 "text-h5"
@@ -271,6 +319,11 @@ def register():
             ).classes("w-60")
 
             def update_tables():
+                """Refresh the table dropdown when the database changes.
+
+                Queries ``get_table_info()`` for the list of user tables
+                in the selected database and populates the dropdown.
+                """
                 if database_select.value:
                     try:
                         result = ctx.storage.get_table_info(
@@ -293,6 +346,16 @@ def register():
             export_result_area = ui.card().classes("w-full mt-2 shadow-none")
 
             async def execute_export():
+                """Execute the CSV export workflow.
+
+                1. Validate that a database and table are selected.
+                2. Show a spinner dialog while the export runs.
+                3. Call ``export_csv`` in a background thread to write
+                   a temp CSV file.
+                4. Read the file, base64-encode it, and trigger a
+                   browser download via a data URL.
+                5. Clean up the temp file and display the result.
+                """
                 if not database_select.value:
                     ui.notify(_("select_database"), type="warning")
                     return
@@ -301,6 +364,7 @@ def register():
                     ui.notify(_("select_table"), type="warning")
                     return
 
+                # Show a modal spinner while the export runs.
                 with ui.dialog() as dlg, ui.card().style(
                     f"background: {BG_CARD};"
                     " min-width: 320px;"
@@ -310,8 +374,10 @@ def register():
                     ui.label(_("exporting")).style(f"color: {YELLOW_LIGHT}")
                 dlg.open()
 
+                # Temp file path for the exported CSV.
                 csv_path = Path(f"/tmp/webduck_export_{table_select.value}.csv")
                 try:
+                    # Run the export in a background thread to keep the UI responsive.
                     result = await asyncio.to_thread(
                         ctx.storage.export_csv,
                         project_select.value,
@@ -321,6 +387,7 @@ def register():
                     )
                     if result.get("success") and csv_path.exists():
                         csv_content = csv_path.read_text()
+                        # Base64-encode and trigger a browser download via data URL.
                         import base64
                         b64 = base64.b64encode(csv_content.encode()).decode()
                         filename = f"{table_select.value}.csv"
@@ -337,6 +404,7 @@ def register():
                     log_error(f"CSV export error [{project_select.value}/{database_select.value}]: {e}")
                     result = {"success": False, "error": str(e)}
                 finally:
+                    # Always clean up the temp file and close the spinner.
                     csv_path.unlink(missing_ok=True)
                     dlg.close()
 

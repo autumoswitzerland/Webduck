@@ -39,6 +39,10 @@ class StorageEngine:
 
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
+        # Per-file threading locks prevent concurrent writes to the same
+        # .duckdb file. DuckDB only allows one writer per database at a time,
+        # so we use a separate Lock per resolved file path. `_locks_lock`
+        # guards creation of new entries (not the locks themselves).
         self._locks: dict[str, threading.Lock] = {}
         self._locks_lock = threading.Lock()
 
@@ -57,7 +61,12 @@ class StorageEngine:
         return self.data_dir / ".projects.json"
 
     def _load_project_order(self) -> list[str]:
-        """Load project order from JSON, sync with filesystem."""
+        """Load project order from JSON, sync with filesystem.
+
+        Projects can be created outside the app (e.g. by mounting a volume),
+        so we always reconcile the JSON list against the actual directories on
+        disk. Missing entries are appended at the end in sorted order.
+        """
         if not self.data_dir.exists():
             return []
 
@@ -73,6 +82,7 @@ class StorageEngine:
                 data = json.loads(
                     order_path.read_text(encoding="utf-8")
                 )
+                # Only keep entries that still exist on disk; drop deleted ones
                 ordered = [
                     p for p in data.get("projects", [])
                     if p in fs_projects
@@ -82,6 +92,7 @@ class StorageEngine:
         else:
             ordered = []
 
+        # Append any new directories not yet in the JSON (alphabetically)
         for p in sorted(fs_projects - set(ordered)):
             ordered.append(p)
 
@@ -146,7 +157,12 @@ class StorageEngine:
         return self._get_db_path(project, database).exists()
 
     def create_database(self, project: str, database: str) -> bool:
-        """Create a new empty database."""
+        """Create a new empty database.
+
+        We open and immediately close a DuckDB connection here because
+        DuckDB creates the .duckdb file lazily on connect — the file
+        won't exist until a connection is opened at least once.
+        """
         project_dir = self.data_dir / project
         project_dir.mkdir(parents=True, exist_ok=True)
 
@@ -154,6 +170,8 @@ class StorageEngine:
         if db_path.exists():
             return False
 
+        # Lock is acquired to avoid a race where two concurrent calls try to
+        # create the same database file simultaneously.
         lock = self._get_lock(str(db_path))
         with lock:
             con = duckdb.connect(str(db_path))
@@ -195,7 +213,13 @@ class StorageEngine:
         params: dict[str, Any] | None = None,
         read_only: bool = True,
     ) -> dict[str, Any]:
-        """Execute a SQL query and return results."""
+        """Execute a SQL query and return results.
+
+        The per-file lock is held for the entire duration of the query.
+        This is necessary because DuckDB's single-writer model means a
+        write transaction blocks all other writers; holding the lock
+        prevents other threads from hanging on a stale connection.
+        """
         db_path = self._get_db_path(project, database)
         if not db_path.exists():
             return {
@@ -209,6 +233,9 @@ class StorageEngine:
                 con = duckdb.connect(str(db_path), read_only=read_only)
                 try:
                     result = con.execute(sql, params or None)
+                    # `result` is None for DDL/DML statements that don't return
+                    # rows (CREATE, INSERT, DROP, etc.). `description` is only
+                    # set when there is a result set (SELECT, EXPLAIN, etc.).
                     if result is not None and result.description:
                         columns = [desc[0] for desc in result.description]
                         rows = [list(r) for r in result.fetchall()]
@@ -227,6 +254,10 @@ class StorageEngine:
                     con.close()
             except Exception as e:
                 error_msg = str(e)
+                # DuckDB throws "Catalog Error" when you try to DROP a table
+                # that is referenced by a foreign key. Since the error message
+                # itself is not very helpful, we scan for FK dependencies and
+                # append a human-readable hint listing the dependent tables.
                 if "Catalog Error" in error_msg:
                     hint = self._get_drop_hint(db_path, sql)
                     if hint:
@@ -234,7 +265,18 @@ class StorageEngine:
                 return {"success": False, "error": error_msg}
 
     def _get_drop_hint(self, db_path, sql: str) -> str | None:
-        """Check FK dependencies for DROP TABLE/VIEW and return a hint."""
+        """Check FK dependencies for DROP TABLE/VIEW and return a hint.
+
+        DuckDB enforces foreign key constraints on DROP — you cannot drop a
+        table that is referenced by another table's FK without CASCADE.  The
+        native error is a generic "Catalog Error" which is not actionable, so
+        this method queries `duckdb_constraints()` to build a list of
+        dependent tables and suggests the user drops dependencies first or
+        uses CASCADE.
+
+        NOTE: We only check the `main` schema. Other schemas (e.g. `temp`)
+        are unlikely to have user-defined FK relationships in this context.
+        """
         import re
         sql_upper = sql.strip().upper()
 
@@ -245,6 +287,8 @@ class StorageEngine:
         if not is_drop:
             return None
 
+        # Extract the unqualified table/view name, tolerating IF EXISTS and
+        # optional quoting (backticks, double-quotes, single-quotes).
         m = re.search(
             r"DROP\s+(?:TABLE|VIEW)\s+(?:IF\s+EXISTS\s+)?[`\"']?(\w+)",
             sql, re.IGNORECASE,
@@ -256,6 +300,9 @@ class StorageEngine:
         try:
             con = duckdb.connect(str(db_path), read_only=True)
             try:
+                # `duckdb_constraints()` is a system catalog function that
+                # returns all constraints across all tables. We filter to
+                # FOREIGN KEY only to find which tables reference `target`.
                 res = con.execute(
                     "SELECT table_name, constraint_type, "
                     "constraint_text "
@@ -271,6 +318,7 @@ class StorageEngine:
 
         deps = []
         for table_name, _, constraint_text in rows:
+            # Match case-insensitively since the FK text may use mixed case
             if target.lower() in constraint_text.lower():
                 deps.append((table_name, constraint_text))
 
@@ -293,7 +341,20 @@ class StorageEngine:
         sql: str,
         read_only: bool = False,
     ) -> list[dict[str, Any]]:
-        """Execute one or more SQL statements and return results for each."""
+        """Execute one or more SQL statements and return results for each.
+
+        Statements are split by `;` and executed sequentially.  On the first
+        failure execution stops — later statements are not attempted.  This
+        is intentional: multi-statement uploads (CREATE + INSERT, etc.)
+        should be atomic-ish from the user's perspective; running later
+        statements after an earlier failure could leave the database in an
+        inconsistent state.
+
+        NOTE: This is a naive split — semicolons inside string literals or
+        comments will break parsing.  DuckDB's own `execute()` would handle
+        that correctly, but we need per-statement error reporting which
+        requires individual calls.
+        """
         statements = [s.strip() for s in sql.split(";") if s.strip()]
         if not statements:
             return []
@@ -307,7 +368,14 @@ class StorageEngine:
         return results
 
     def get_table_info(self, project: str, database: str) -> dict[str, Any]:
-        """Get information about all tables in a database."""
+        """Get information about all tables in a database.
+
+        Queries `information_schema` which is DuckDB's SQL-standard catalog.
+        Note the N+1 query pattern: one query to list tables, then one
+        additional query per table for its columns.  For the small number of
+        tables typical in this app this is fine — a single self-join query
+        would be more efficient at scale but harder to read.
+        """
         sql = """
             SELECT table_name
             FROM information_schema.tables
@@ -341,7 +409,13 @@ class StorageEngine:
         table_name: str,
         csv_path: Path,
     ) -> dict[str, Any]:
-        """Import a CSV file into a table."""
+        """Import a CSV file into a table.
+
+        Uses DuckDB's `read_csv_auto()` which infers column types and handles
+        headers, quoted fields, and various delimiters automatically.  The
+        `CREATE OR REPLACE` means an existing table with the same name will
+        be silently overwritten — this is intentional for re-imports.
+        """
         if not csv_path.exists():
             return {"success": False, "error": f"CSV file not found: {csv_path}"}
 
@@ -355,6 +429,11 @@ class StorageEngine:
         table_name: str,
         csv_path: Path,
     ) -> dict[str, Any]:
-        """Export a table to CSV."""
+        """Export a table to CSV.
+
+        Uses DuckDB's `COPY ... TO` statement.  The HEADER option writes
+        column names as the first row.  DuckDB writes CSVs very efficiently
+        (C++ backend) so even large tables are fast.
+        """
         sql = f"COPY {table_name} TO '{csv_path}' (FORMAT CSV, HEADER)"
         return self.execute_query(project, database, sql, read_only=False)

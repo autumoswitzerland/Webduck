@@ -15,13 +15,33 @@
 #  Application entry point, CLI commands, and app setup.
 #  All UI pages are registered via modules under webduck.pages.
 #
+#  Startup sequence (``start`` command):
+#    1. Load YAML config via ``load_config()``.
+#    2. Override host/port if CLI flags differ from config defaults.
+#    3. Ensure the data directory exists.
+#    4. Initialise rotating file logger (``setup_logging()``).
+#    5. Build the FastAPI app (``setup_app()``) — creates StorageEngine,
+#       AuthManager, mounts static files, registers REST routers.
+#    6. Initialise the page context singleton with shared services.
+#    7. Register all NiceGUI pages (login, dashboard, projects, …).
+#    8. Hand off to ``ui.run_with()`` which wraps FastAPI and starts uvicorn.
+#
 #  Project:   WebDuck
 #  Author:    autumo GmbH
 #  Version:   1.0.0
 #  Date:      2026-07-20
 # =============================================================================
 
-"""WebDuck - Main application entry point."""
+"""WebDuck - Main application entry point.
+
+This module is the central orchestrator.  It wires together FastAPI (REST),
+NiceGUI (Web UI), DuckDB storage, and authentication into a single process
+served on one port.  The ``main()`` function exposes three Click commands:
+
+* ``webduck init``  — create the first admin user and write a config file.
+* ``webduck start`` — boot the full server (FastAPI + NiceGUI + uvicorn).
+* ``webduck status`` — print project/database/user counts from the data dir.
+"""
 
 import secrets
 import sys
@@ -49,7 +69,11 @@ from webduck.pages.context import (
 )
 from webduck.storage.engine import StorageEngine
 
-# Module-level references (set by setup_app)
+# ---------------------------------------------------------------------------
+# Module-level singletons — populated once by setup_app() / start command.
+# Kept at module level so page modules can import them via the context
+# singleton rather than passing references through every function call.
+# ---------------------------------------------------------------------------
 _config: WebDuckConfig | None = None
 _storage: StorageEngine | None = None
 _auth: AuthManager | None = None
@@ -57,7 +81,16 @@ _project_auth: ProjectAuth | None = None
 _version: str = ""
 _icon: str = ""
 
-# CSS theme
+# ---------------------------------------------------------------------------
+# Global dark-theme CSS injected into every NiceGUI page via ui.add_head_html().
+#
+# Design rules (never break these):
+#   • Background #12121a, cards #1E1E1E, drawer #1a1a1a
+#   • Accent yellow/amber (#FFD54F title, #FFE082 subtitles)
+#   • NO box-shadows anywhere — forced to none via * selector
+#   • Quasar tables use flat bordered props
+#   • Rounded buttons, compact drawer items
+# ---------------------------------------------------------------------------
 _DARK_CSS = f"""
 <style>
 body {{
@@ -163,24 +196,44 @@ html {{
 """
 
 
+# =========================================================================
+#  FastAPI app factory
+# =========================================================================
+
 def setup_app(cfg: WebDuckConfig) -> FastAPI:
-    """Setup FastAPI application with all routers and static files."""
+    """Create and configure the FastAPI application.
+
+    This is called once during ``start``.  It initialises the core services
+    (storage, auth), mounts static assets, registers the REST API routers,
+    and adds a few lightweight utility endpoints (health, root redirect,
+    project reorder).
+
+    Args:
+        cfg: The fully-loaded application configuration.
+
+    Returns:
+        A configured ``FastAPI`` instance ready for ``uvicorn.run()``.
+    """
     global _config, _storage, _auth, _project_auth, _version, _icon
 
     _config = cfg
     _version = cfg.version
     _icon = cfg.icon
 
+    # Ensure the data directory exists before opening any DuckDB files
     cfg.server.data_dir.mkdir(parents=True, exist_ok=True)
 
+    # Storage engine — wraps all DuckDB operations behind a file-locked API
     _storage = StorageEngine(cfg.server.data_dir)
 
+    # Auth manager — JWT signing/verification and bcrypt password hashing
     _auth = AuthManager(
         cfg.server.data_dir,
         cfg.auth.jwt_secret,
         cfg.auth.jwt_algorithm,
     )
 
+    # Per-project auth — tracks which users may access which projects
     _project_auth = ProjectAuth(cfg.server.data_dir)
 
     app = FastAPI(
@@ -189,33 +242,40 @@ def setup_app(cfg: WebDuckConfig) -> FastAPI:
         version=cfg.version,
     )
 
-    # Mount static files
+    # --- Static files (icons, CSS, JS) ---
+    # Resolve relative to the package source tree (src/webduck → ../../static)
     static_dir = Path(__file__).resolve().parent.parent.parent / "static"
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-    # Include API routers
+    # --- REST API routers ---
     app.include_router(admin_api.router)
     app.include_router(db_api.router)
 
-    # Health check endpoint
+    # --- Utility endpoints ---
+
     @app.get("/health")
     async def health():
+        """Health check — used by load balancers and container probes."""
         return {"status": "ok"}
 
-    # Redirect root to UI
     from fastapi.responses import RedirectResponse
 
     @app.get("/")
     async def root():
+        """Redirect bare ``/`` to the NiceGUI web UI."""
         return RedirectResponse(url="/ui")
 
-    # Reorder projects (called from UI via JS fetch)
     from fastapi import Request
     from fastapi.responses import JSONResponse
 
     @app.post("/api/reorder-projects")
     async def reorder_projects_ui(request: Request):
+        """Reorder projects via a JS ``fetch()`` call from the UI.
+
+        Expects a JSON body ``{"projects": ["name1", "name2", ...]}``.
+        Called from drag-and-drop handlers in the projects page.
+        """
         try:
             body = await request.json()
             projects = body.get("projects", [])
@@ -231,11 +291,21 @@ def setup_app(cfg: WebDuckConfig) -> FastAPI:
     return app
 
 
-# --- CLI ---
-
+# =========================================================================
+#  CLI — built with Click
+# =========================================================================
 
 def main():
-    """Main entry point for CLI."""
+    """Main entry point for CLI.
+
+    Registers three Click commands under the ``webduck`` group:
+
+    * ``webduck init``  — interactive or non-interactive admin user creation;
+      auto-generates a JWT secret on first run and saves a starter config.
+    * ``webduck start`` — boots the full stack (FastAPI + NiceGUI + uvicorn).
+    * ``webduck status`` — reads the data directory and prints project,
+      database, and user counts.
+    """
     import click
 
     from webduck.config import save_config
@@ -246,6 +316,9 @@ def main():
         """WebDuck - A DuckDB server with REST API and Web UI."""
         pass
 
+    # -----------------------------------------------------------------
+    #  webduck init
+    # -----------------------------------------------------------------
     @cli.command()
     @click.option(
         "--config", type=click.Path(), default=None,
@@ -254,7 +327,12 @@ def main():
     @click.option("--username", default=None, help="Admin username (non-interactive)")
     @click.option("--password", default=None, help="Admin password (non-interactive)")
     def init(config, username, password):
-        """Initialize WebDuck (create admin user)."""
+        """Initialize WebDuck (create admin user).
+
+        If ``--username`` and ``--password`` are both provided the command
+        runs non-interactively (useful for CI / Docker ENTRYPOINT scripts).
+        Otherwise it prompts for credentials and confirms the password.
+        """
         config_path = Path(config) if config else Path("webduck.yaml")
         cfg = load_config(config_path)
 
@@ -262,8 +340,10 @@ def main():
         click.echo("=" * 40)
 
         if username and password:
+            # Non-interactive mode — both flags supplied
             click.echo(f"Creating admin user '{username}'")
         else:
+            # Interactive mode — prompt for credentials
             username = click.prompt("Admin username")
             password = click.prompt("Admin password", hide_input=True)
             password_confirm = click.prompt(
@@ -275,6 +355,7 @@ def main():
 
         cfg.server.data_dir.mkdir(parents=True, exist_ok=True)
 
+        # Auto-generate a secure JWT secret if the placeholder is still set
         if "CHANGE-ME" in cfg.auth.jwt_secret:
             cfg.auth.jwt_secret = secrets.token_urlsafe(48)
             click.echo("Generated new JWT secret")
@@ -296,12 +377,16 @@ def main():
             )
             sys.exit(1)
 
+        # Only write a new config file if one didn't already exist
         if not config_path.exists():
             save_config(cfg, config_path)
             click.echo(f"Config saved to {config_path}")
 
         click.echo("Initialization complete!")
 
+    # -----------------------------------------------------------------
+    #  webduck start
+    # -----------------------------------------------------------------
     @cli.command()
     @click.option("--host", default="0.0.0.0", help="Host to bind")
     @click.option(
@@ -312,10 +397,17 @@ def main():
         help="Config file path",
     )
     def start(host, port, config):
-        """Start the WebDuck server."""
+        """Start the WebDuck server.
+
+        Loads config, overrides host/port if CLI flags differ from defaults,
+        sets up logging, builds the FastAPI app, registers NiceGUI pages,
+        and starts uvicorn.  The CLI banner is printed *before* uvicorn
+        takes over the terminal.
+        """
         config_path = Path(config) if config else Path("webduck.yaml")
         cfg = load_config(config_path)
 
+        # CLI flags override config values only when explicitly provided
         if host != "0.0.0.0":
             cfg.server.host = host
         if port != 8998:
@@ -323,6 +415,8 @@ def main():
 
         cfg.server.data_dir.mkdir(parents=True, exist_ok=True)
 
+        # --- Logging setup ---
+        # File logging uses RotatingFileHandler; console logging is separate
         from webduck.logging import setup_logging
         setup_logging(
             cfg.server.data_dir,
@@ -335,12 +429,17 @@ def main():
             console_enabled=cfg.logging.console.enabled,
         )
 
+        # --- Build FastAPI app (storage, auth, routes) ---
         fastapi_app = setup_app(cfg)
 
+        # --- Page context singleton ---
+        # Provides shared services (config, storage, auth) to all page modules
         from webduck.pages.context import init_context
         init_context(cfg, _storage, _auth, _project_auth)
 
-        # Register all UI pages
+        # --- Register NiceGUI pages ---
+        # Each page module exposes a ``register()`` that binds a URL route
+        # and defines the page's UI via NiceGUI decorators.
         from webduck.pages import browse as browse_page
         from webduck.pages import dashboard as dashboard_page
         from webduck.pages import import_export as import_export_page
@@ -355,6 +454,9 @@ def main():
         browse_page.register()
         import_export_page.register()
 
+        # --- Favicon ---
+        # SVG favicons are inlined as data-URLs; other formats are passed
+        # as file paths to NiceGUI which handles embedding.
         favicon_path = None
         if cfg.icon:
             candidate = (
@@ -366,6 +468,10 @@ def main():
             elif candidate.exists():
                 favicon_path = str(candidate)
 
+        # --- Hand off to NiceGUI ---
+        # ``ui.run_with()`` wraps the FastAPI app and mounts the NiceGUI
+        # WebSocket + page routes under ``/ui``.  The ``storage_secret``
+        # encrypts NiceGUI's browser-local user session cookies.
         ui.run_with(
             fastapi_app,
             mount_path="/ui",
@@ -386,6 +492,10 @@ def main():
         click.echo("  Press Ctrl+C to stop")
         click.echo("")
 
+        # --- Start uvicorn ---
+        # uvicorn.run() blocks until Ctrl+C.  When console logging is
+        # disabled, we suppress uvicorn's noisy access log and lower the
+        # log level to "warning" so only errors reach stderr.
         uvicorn.run(
             fastapi_app,
             host=cfg.server.host,
@@ -402,13 +512,20 @@ def main():
             ),
         )
 
+    # -----------------------------------------------------------------
+    #  webduck status
+    # -----------------------------------------------------------------
     @cli.command()
     @click.option(
         "--config", type=click.Path(), default=None,
         help="Config file path",
     )
     def status(config):
-        """Show WebDuck status."""
+        """Show WebDuck status.
+
+        Opens the data directory, counts projects, databases per project,
+        and lists admin users.  Read-only — never modifies any files.
+        """
         config_path = Path(config) if config else Path("webduck.yaml")
         cfg = load_config(config_path)
 

@@ -56,6 +56,27 @@ def set_dependencies(storage: StorageEngine) -> None:
     project_auth = ProjectAuth(storage.data_dir)
 
 
+# ---------------------------------------------------------------------------
+#  X-Project-Key Authentication
+# ---------------------------------------------------------------------------
+#  Clients authenticate by sending the X-Project-Key header with value
+#  "project:password". The header is parsed by splitting on the first ':'.
+#
+#  The flow is:
+#    1. Check if the target database has ANY password configured (read or write).
+#       - If NO password is set, the database is "open access" — any request
+#         is allowed without credentials. This is the default for local/dev.
+#    2. If a password IS configured, the header must be present and well-formed.
+#    3. The password portion is verified against bcrypt hashes stored in the
+#       project's .project.json config file (see ProjectAuth for details).
+#
+#  Access level escalation:
+#    - A write-level password also grants read access (checked in
+#      ProjectAuth.has_database_access), so a single credential can cover
+#      both read and write operations.
+#    - A read-level password does NOT grant write access.
+# ---------------------------------------------------------------------------
+
 def verify_project_key(
     project: str,
     database: str,
@@ -66,9 +87,13 @@ def verify_project_key(
         log_error("verify_project_key: Project auth not initialized")
         raise HTTPException(status_code=500, detail="Project auth not initialized")
 
+    # Fast path: if no password is configured for this database, grant open access.
+    # has_database_password checks both read and write hashes — if neither exists,
+    # the database is unprotected and we return None (no password needed).
     if not project_auth.has_database_password(project, database):
         return None
 
+    # Password is configured, so the header MUST be present.
     if not x_project_key:
         log_warning(f"verify_project_key: Missing auth header for '{project}/{database}'")
         raise HTTPException(
@@ -79,6 +104,8 @@ def verify_project_key(
             ),
         )
 
+    # Parse "project:password" — split on first ':' only so passwords containing
+    # ':' are handled correctly (e.g. "myproject:p:ass:word").
     try:
         _, password = x_project_key.split(":", 1)
     except ValueError:
@@ -88,6 +115,9 @@ def verify_project_key(
             detail="Invalid project key format. Use: project:password",
         )
 
+    # has_database_access checks the requested access level (read) and also
+    # tries write-level as a fallback (write grants read). Passwords are
+    # bcrypt-hashed and verified via constant-time comparison.
     if not project_auth.has_database_access(project, database, password, "read"):
         log_warning(f"verify_project_key: Invalid credentials for '{project}/{database}'")
         raise HTTPException(
@@ -140,7 +170,14 @@ async def execute_query(
     req: QueryRequest,
     password: str = Depends(verify_project_key),
 ) -> QueryResponse:
-    """Execute a SQL query (read-only)."""
+    """Execute a SQL query (read-only).
+
+    Runs the query with read_only=True, which restricts execution to
+    SELECT statements. DuckDB enforces this at the connection level —
+    any INSERT/UPDATE/DELETE will raise an error even if passed here.
+    The engine still uses execute_query (not execute_queries) because
+    read-only queries return result sets.
+    """
     if not storage_engine:
         log_error("execute_query: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
@@ -160,12 +197,19 @@ async def execute_write(
     req: QueryRequest,
     password: str = Depends(verify_project_key),
 ) -> QueryResponse:
-    """Execute a SQL query (read-write)."""
+    """Execute a SQL query (read-write).
+
+    Accepts DDL (CREATE, ALTER, DROP) and DML (INSERT, UPDATE, DELETE).
+    Requires explicit "write" access level — read-only credentials are
+    rejected here even though verify_project_key passed.
+    """
     if not storage_engine:
         log_error("execute_write: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
-    # Verify write access
+    # verify_project_key already validated "read" access. We now need to
+    # additionally check "write" access, since read credentials should not
+    # be able to modify data.
     if not project_auth:
         log_error("execute_write: Project auth not initialized")
         raise HTTPException(status_code=500, detail="Project auth not initialized")
@@ -191,7 +235,11 @@ async def list_tables(
     database: str,
     password: str = Depends(verify_project_key),
 ) -> dict:
-    """List all tables in a database."""
+    """List all tables in a database.
+
+    Returns table metadata including column names and row counts.
+    Internally queries DuckDB's information_schema.
+    """
     if not storage_engine:
         log_error("list_tables: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
@@ -199,6 +247,28 @@ async def list_tables(
     result = storage_engine.get_table_info(project, database)
     return result
 
+
+# ---------------------------------------------------------------------------
+#  CSV Import
+# ---------------------------------------------------------------------------
+#  Imports a CSV file from disk into a new or existing DuckDB table.
+#
+#  The csv_path must be an absolute path on the server filesystem that
+#  DuckDB can access. DuckDB's CSV reader auto-detects:
+#    - Delimiter (comma, semicolon, tab, etc.)
+#    - Header rows
+#    - Column types (strings, integers, dates, etc.)
+#    - Quoting and escape characters
+#
+#  If the target table already exists, DuckDB appends rows to it.
+#  If it doesn't exist, DuckDB creates it automatically with inferred
+#  column types from the CSV data.
+#
+#  Note: The max upload size is configured via `server.max_upload_mb` in
+#  webduck.yaml, but this endpoint operates on server-side file paths,
+#  not uploaded file content — the size limit applies to the NiceGUI UI
+#  upload path, not to this REST endpoint directly.
+# ---------------------------------------------------------------------------
 
 @router.post("/projects/{project}/databases/{database}/import")
 async def import_csv(
@@ -208,12 +278,17 @@ async def import_csv(
     csv_path: str,
     password: str = Depends(verify_project_key),
 ) -> dict:
-    """Import a CSV file into a table."""
+    """Import a CSV file into a table.
+
+    The csv_path is a server-local path; DuckDB reads it directly via
+    its native CSV reader which handles auto-type-detection and
+    flexible delimiter handling.
+    """
     if not storage_engine:
         log_error("import_csv: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
-    # Verify write access
+    # Write access is required — import creates or modifies table data.
     if not project_auth:
         log_error("import_csv: Project auth not initialized")
         raise HTTPException(status_code=500, detail="Project auth not initialized")
@@ -225,11 +300,27 @@ async def import_csv(
             detail="Write access denied",
         )
 
+    # Path is wrapped in a Path object by the engine for safe resolution.
+    # DuckDB's read_csv function handles the actual file I/O.
     result = storage_engine.import_csv(project, database, table_name, Path(csv_path))
     if not result.get("success"):
         log_error(f"CSV import failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return result
 
+
+# ---------------------------------------------------------------------------
+#  CSV Export
+# ---------------------------------------------------------------------------
+#  Exports a DuckDB table to a CSV file on the server filesystem.
+#
+#  DuckDB's COPY TO statement is used, which produces standard CSV with:
+#    - Comma delimiter
+#    - Header row with column names
+#    - Standard quoting (double-quote around fields containing commas/newlines)
+#
+#  The target table must already exist and be a regular table (not a view).
+#  DuckDB will overwrite the file if it already exists.
+# ---------------------------------------------------------------------------
 
 @router.get("/projects/{project}/databases/{database}/export")
 async def export_csv(
@@ -239,12 +330,16 @@ async def export_csv(
     csv_path: str,
     password: str = Depends(verify_project_key),
 ) -> dict:
-    """Export a table to CSV."""
+    """Export a table to CSV.
+
+    Uses DuckDB's COPY TO statement internally. The csv_path is a
+    server-local destination path. The file is created or overwritten.
+    """
     if not storage_engine:
         log_error("export_csv: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
-    # Verify write access
+    # Write access is required — export writes a file to the server filesystem.
     if not project_auth:
         log_error("export_csv: Project auth not initialized")
         raise HTTPException(status_code=500, detail="Project auth not initialized")

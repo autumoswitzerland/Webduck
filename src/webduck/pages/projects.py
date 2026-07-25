@@ -9,7 +9,13 @@
 # of this software.
 # ------------------------------------------------------------------------------
 
-"""Projects page."""
+"""Projects page — CRUD for projects and databases with drag-and-drop reordering.
+
+Users can create/delete projects, create/delete databases within projects,
+set per-database API passwords, and reorder projects by dragging the
+6-dot grip handle.  Reorder state is persisted via a POST to
+``/api/reorder-projects``.
+"""
 
 import secrets
 
@@ -32,6 +38,7 @@ from webduck.pages.ui_helpers import (
 
 
 def register():
+    """Register the ``/projects`` page route with NiceGUI."""
     from webduck.i18n import get_user_translator
 
     @ui.page("/projects")
@@ -40,6 +47,7 @@ def register():
         apply_dark_theme()
         ui.page_title(f"WebDuck {ctx.version} — Projects")
 
+        # Auth guard: redirect to login if no session token exists.
         if "token" not in nicegui_app.storage.user:
             ui.navigate.to("/login")
             return
@@ -94,6 +102,7 @@ def register():
             projects = []
 
         if projects:
+            # Sortable container — project cards can be reordered via drag & drop.
             sortable = ui.column().classes("w-full")
             with sortable:
                 for project in projects:
@@ -103,6 +112,7 @@ def register():
                         with ui.row().classes(
                             "w-full items-center gap-2"
                         ):
+                            # 6-dot grip handle SVG — only this element initiates drag.
                             ui.html(
                                 '<svg class="drag-handle" '
                                 'width="18" height="18" '
@@ -120,6 +130,7 @@ def register():
                                 '<circle cx="15" cy="18" r="1"/>'
                                 '</svg>'
                             )
+                            # Folder icon SVG — visual indicator for project rows.
                             ui.html(
                                 '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" '
                                 'stroke="#FFE082" stroke-width="2" stroke-linecap="round" '
@@ -143,6 +154,7 @@ def register():
                                 f"{len(dbs)} {_('databases')}"
                             ).classes("text-caption")
 
+                            # Delete button with confirmation dialog.
                             async def delete_project(p=project):
                                 with ui.dialog() as dlg, ui.card().classes(
                                     "items-center gap-4"
@@ -189,6 +201,8 @@ def register():
                             ).props("outline color=red").classes("border-button")
 
                         # ── Existing databases (sub-card) ──────
+                        # Lists all databases within this project, with
+                        # per-database password management and delete buttons.
                         dbs = ctx.storage.list_databases(project)
                         if dbs:
                             with ui.card().classes(
@@ -204,6 +218,7 @@ def register():
                                     with ui.row().classes(
                                         "w-full items-center gap-2"
                                     ):
+                                        # Database cylinder SVG icon.
                                         ui.html(
                                             '<svg width="16" height="16" viewBox="0 0 24 24" '
                                             'fill="none" stroke="#999" stroke-width="2" '
@@ -214,6 +229,7 @@ def register():
                                             '<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>'
                                         )
                                         ui.label(db_name).classes("text-body2")
+                                        # Show a lock icon if this database has an API password set.
                                         _pa = ctx.project_auth or ProjectAuth(ctx.storage.data_dir)
                                         has_pw = _pa.has_database_password(
                                             project, db_name
@@ -232,6 +248,7 @@ def register():
                                             )
                                         ui.space()
 
+                                        # Password change dialog: generate or set a new API password.
                                         async def change_db_password(
                                             p=project, d=db_name
                                         ):
@@ -267,6 +284,7 @@ def register():
                                                         ui.navigate.reload()
 
                                                 with ui.row().classes("gap-2"):
+                                                    # Generate button: fills the input with a random URL-safe token.
                                                     ui.button(
                                                         _("generate_password"),
                                                         on_click=lambda: setattr(
@@ -284,6 +302,7 @@ def register():
                                                     )
                                             dlg.open()
 
+                                        # Key icon button to open the password change dialog.
                                         ui.button(
                                             on_click=change_db_password,
                                         ).props(
@@ -292,6 +311,7 @@ def register():
                                             _("change_password")
                                         ).props("tooltip-position=top")
 
+                                        # Database delete with confirmation dialog.
                                         async def delete_db(
                                             p=project, d=db_name
                                         ):
@@ -341,6 +361,8 @@ def register():
                                         ).classes("border-button")
 
                         # ── Create database (sub-card) ─────────
+                        # Input for new database name + optional API password
+                        # with a random password generator button.
                         with ui.card().classes(
                             "w-full q-mt-sm"
                         ).style(
@@ -364,6 +386,7 @@ def register():
                                 ).classes("flex-grow").props('autocomplete="new-password"')
 
                                 def generate_db_password(pw=new_db_password):
+                                    """Fill the password field with a random 16-byte URL-safe token."""
                                     pw.value = secrets.token_urlsafe(16)
 
                                 ui.button(
@@ -384,6 +407,7 @@ def register():
                                             p, db_name.value
                                         )
                                         if ok:
+                                            # Optionally set API password on the newly created database.
                                             if db_password.value:
                                                 pa = (
                                                     ctx.project_auth
@@ -416,6 +440,10 @@ def register():
                     "text-caption"
                 )
 
+        # ── Client-side drag & drop reordering ─────────────
+        # Injects JavaScript that makes project cards draggable via
+        # the 6-dot grip handle.  On drop, the new order is sent to
+        # the server via the _wdReorder() helper function.
         if projects:
             ui.run_javascript("""
                 const container = document.querySelector(
@@ -434,6 +462,7 @@ def register():
                     );
                     if (!h) return;
 
+                    // Enable dragging only when mousedown occurs on the grip handle.
                     h.addEventListener('mousedown', () => {
                         card.draggable = true;
                     });
@@ -447,6 +476,7 @@ def register():
                     card.addEventListener('dragend', () => {
                         card.style.opacity = '1';
                         dragged = null;
+                        // Clear all drop indicators.
                         parent.querySelectorAll(
                             '.project-card'
                         ).forEach(c => {
@@ -454,6 +484,7 @@ def register():
                         });
                     });
 
+                    // Show a yellow top-border as a drop indicator.
                     card.addEventListener('dragover', e => {
                         e.preventDefault();
                         e.dataTransfer.dropEffect = 'move';
@@ -467,6 +498,7 @@ def register():
                         }
                     );
 
+                    // On drop: reorder DOM nodes, then persist the new order.
                     card.addEventListener('drop', e => {
                         e.preventDefault();
                         card.style.borderTop = '';
@@ -489,6 +521,7 @@ def register():
                                     card
                                 );
                             }
+                            // Read the new project order from the DOM and send to server.
                             const order = [
                                 ...parent.querySelectorAll(
                                     '.project-card'
@@ -503,6 +536,7 @@ def register():
                     });
                 });
             """)
+            # Server-side reorder helper: POSTs the new project order to the API.
             ui.run_javascript("""
                 window._wdReorder = async function(o) {
                     try {

@@ -9,7 +9,16 @@
 # of this software.
 # ------------------------------------------------------------------------------
 
-"""SQL Queries + Upload page."""
+"""SQL Queries + Upload page.
+
+Provides two modes of SQL execution:
+1. **Interactive editor** — type or paste multi-statement SQL, execute
+   against the selected database, and see results rendered as tables or
+   status messages.
+2. **File upload** — drag-and-drop or click-to-upload a ``.sql`` file,
+   which is read client-side and sent to the server for sequential
+   multi-statement execution.
+"""
 
 import asyncio
 import re
@@ -34,6 +43,7 @@ from webduck.pages.user_prefs import get_user_pref, set_user_pref
 
 
 def register():
+    """Register the ``/query`` page route with NiceGUI."""
     from webduck.i18n import get_user_translator
 
     @ui.page("/query")
@@ -42,6 +52,7 @@ def register():
         apply_dark_theme()
         ui.page_title(f"WebDuck {ctx.version} — SQL Queries")
 
+        # Auth guard: redirect to login if no session token exists.
         if "token" not in nicegui_app.storage.user:
             ui.navigate.to("/login")
             return
@@ -51,6 +62,8 @@ def register():
         make_footer(_)
 
         # ── Card 1: Project & DB Selection (shared) ────────────
+        # Both the interactive editor and file upload use these dropdowns.
+        # Selections are persisted per-user via the user_prefs system.
         with ui.card().classes("w-full"):
             ui.label(_("select_database")).classes(
                 "text-h5"
@@ -58,6 +71,7 @@ def register():
 
             with ui.row().classes("w-full gap-4"):
                 projects = ctx.storage.list_projects()
+                # Restore the user's last-used project if it still exists.
                 saved_proj = get_user_pref("query", "project")
                 default_proj = (
                     saved_proj if saved_proj in projects
@@ -74,6 +88,11 @@ def register():
                 ).classes("w-40")
 
                 def update_databases():
+                    """Refresh the database dropdown when the project changes.
+
+                    Restores the previously selected database if it still
+                    exists in the new project, otherwise selects the first one.
+                    """
                     if project_select.value:
                         databases = ctx.storage.list_databases(
                             project_select.value
@@ -116,9 +135,17 @@ def register():
             result_area = ui.card().classes("w-full mt-4 shadow-none")
 
             def _result_message(result, sql_text):
+                """Classify a query result into display categories.
+
+                Returns a (kind, data) tuple where kind is:
+                  - "table"  → result has columns/rows, render as a Quasar table
+                  - "text"   → DML/DDL status message (e.g. "3 rows inserted")
+                  - None     → error message in data
+                """
                 if not result["success"]:
                     return None, result["error"]
                 sql_upper = sql_text.strip().upper()
+                # DDL/DML statements that don't return rows.
                 is_ddl_dml = sql_upper.split()[0] in (
                     "CREATE", "DROP", "ALTER", "INSERT",
                     "UPDATE", "DELETE", "TRUNCATE",
@@ -136,6 +163,7 @@ def register():
                     key = "row_deleted" if rc == 1 else "rows_deleted"
                     return "text", _(key) % rc
                 elif sql_upper.startswith("CREATE TABLE"):
+                    # Extract the table name from the CREATE TABLE statement.
                     m = re.search(
                         r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?'
                         r'[`"\']?(\w+)',
@@ -155,6 +183,13 @@ def register():
                     return "text", _("query_executed")
 
             async def execute_query():
+                """Execute the SQL textarea contents against the selected database.
+
+                Multi-statement SQL is split by the storage engine and
+                executed sequentially.  Each statement's result is rendered
+                as either a table or a status message.  On full success
+                the input is cleared.
+                """
                 if not sql_input.value or not database_select.value:
                     return
 
@@ -179,6 +214,8 @@ def register():
                         }
                     ]
 
+                # Render results: tables get a Quasar table, DML gets a
+                # status line, errors are shown in red.
                 with result_area:
                     result_area.clear()
                     all_ok = True
@@ -220,6 +257,7 @@ def register():
                         else:
                             ui.label(data).style("color: #f64337")
                             all_ok = False
+                    # Clear the editor only if every statement succeeded.
                     if all_ok:
                         sql_input.value = ""
 
@@ -230,12 +268,16 @@ def register():
             )
 
         # ── Card 3: SQL Upload ─────────────────────────────────
+        # Drag-and-drop zone for .sql files.  The file is read entirely
+        # client-side via FileReader and stored in a JS global; the
+        # server never receives the raw file — only the text content.
         with ui.card().classes("w-full q-mt-sm"):
             ui.label(_("sql_upload")).classes(
                 "text-h5"
             ).style(f"color: {YELLOW_LIGHT}")
 
             dsf = _("drop_sql_file")
+            # HTML drop zone: dashed border, hidden file input, info div.
             drop_html = f"""
             <div id="sql-drop-zone" style="
                 border: 2px dashed #444;
@@ -256,16 +298,20 @@ def register():
             """
             ui.html(drop_html)
 
+            # Client-side JS: click opens file picker, drag highlights the
+            # zone, drop reads the file as text and stores it for the server.
             js_setup = f"""
             setTimeout(function() {{
                 var zone = document.getElementById('sql-drop-zone');
                 var fileInput = document.getElementById('sql-file-input');
                 if (!zone || !fileInput) return;
 
+                // Click anywhere in the zone to open the file picker.
                 zone.addEventListener('click', function() {{
                     fileInput.click();
                 }});
 
+                // Visual feedback during drag-over.
                 zone.addEventListener('dragover', function(e) {{
                     e.preventDefault();
                     zone.style.borderColor = '{YELLOW}';
@@ -277,6 +323,7 @@ def register():
                     zone.style.background = 'transparent';
                 }});
 
+                // On drop: read the file as text and store in a JS global.
                 zone.addEventListener('drop', function(e) {{
                     e.preventDefault();
                     zone.style.borderColor = '#444';
@@ -285,18 +332,21 @@ def register():
                     if (file) readFile(file);
                 }});
 
+                // Also handle click-to-upload via the hidden file input.
                 fileInput.addEventListener('change', function(e) {{
                     var file = e.target.files[0];
                     if (file) readFile(file);
                 }});
 
                 function readFile(file) {{
+                    // Enforce the server-configured max upload size.
                     if (file.size > {ctx.max_upload_mb * 1024 * 1024}) {{
                         alert('{_("file_too_large").format(ctx.max_upload_mb)}');
                         return;
                     }}
                     var reader = new FileReader();
                     reader.onload = function(e) {{
+                        // Store the SQL text in a global so the Python side can retrieve it.
                         window._sqlUploadContent = e.target.result;
                         var info = document.getElementById('sql-file-info');
                         if (info) {{
@@ -319,9 +369,18 @@ def register():
             )
 
             async def execute_upload():
+                """Execute the uploaded SQL file contents.
+
+                Retrieves the text from the JS global ``_sqlUploadContent``,
+                shows a spinner dialog while queries run in a background
+                thread, then displays a success/error summary.  On full
+                success the upload state is reset (file info cleared,
+                drop zone border reset).
+                """
                 if not database_select.value:
                     return
 
+                # Retrieve the SQL text that the client-side JS stored.
                 js_result = await ui.run_javascript(
                     'window._sqlUploadContent || ""',
                     timeout=3,
@@ -330,6 +389,7 @@ def register():
                 if not sql_text:
                     return
 
+                # Show a modal spinner while the queries execute.
                 with ui.dialog() as progress_dialog, ui.card().classes(
                     "items-center gap-4"
                 ).style(
@@ -343,6 +403,7 @@ def register():
                     )
                 progress_dialog.open()
 
+                # Run queries in a thread so the UI stays responsive.
                 results = await asyncio.to_thread(
                     ctx.storage.execute_queries,
                     project_select.value,
@@ -352,6 +413,7 @@ def register():
 
                 progress_dialog.close()
 
+                # Display per-statement results: green for success, red for errors.
                 with upload_result_area:
                     upload_result_area.clear()
                     error_count = 0
@@ -374,6 +436,7 @@ def register():
                         ui.label(_(key) % success_count).style(
                             "color: #66BB6A"
                         )
+                        # Reset the upload zone on full success.
                         await ui.run_javascript(
                             """
                             window._sqlUploadContent = "";

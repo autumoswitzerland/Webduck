@@ -9,7 +9,11 @@
 # of this software.
 # ------------------------------------------------------------------------------
 
-"""Shared UI components — header, drawer, footer, dark theme."""
+"""Shared UI components — header, drawer, footer, dark theme.
+
+Every authenticated page calls apply_dark_theme(), make_header(),
+make_drawer(), and make_footer() to get a consistent look and feel.
+"""
 
 from nicegui import app as nicegui_app
 from nicegui import ui
@@ -20,14 +24,21 @@ from webduck.pages.context import (
     YELLOW,
 )
 
+# Holds the left-drawer instance so the header menu button can toggle it.
 _drawer = None
 
 
 def apply_dark_theme():
-    """Enable dark mode and inject custom yellow-accent CSS."""
+    """Enable Quasar dark mode and inject the project-wide dark CSS.
+
+    Imports the _DARK_CSS block from main.py (which sets the global
+    ``box-shadow: none`` rule, background colors, etc.) and adds a small
+    fix for NiceGUI vertical separators.
+    """
     from webduck.main import _DARK_CSS
     ui.dark_mode(True)
     ui.add_head_html(_DARK_CSS)
+    # Force vertical separators to 1 px so they don't appear thick in dark mode.
     ui.add_css('''
         .q-separator--vertical.nicegui-separator {
             width: 1px !important;
@@ -36,17 +47,23 @@ def apply_dark_theme():
 
 
 def do_logout():
+    """Clear user session and redirect to the login page."""
     nicegui_app.storage.user.clear()
     ui.navigate.to("/login")
 
 
 def make_header(_, page_title: str = ""):
-    """Shared header with versioned title, icon."""
+    """Build the shared top header bar.
+
+    Left side  — project icon (if configured) + version string + page title.
+    Right side — hamburger button that toggles the navigation drawer.
+    """
     title_text = f"WebDuck {ctx.version}"
     if page_title:
         title_text += f" — {page_title}"
 
     with ui.header().classes("bg-[#1a1a1a] items-center"):
+        # -- Title row: optional icon + "WebDuck vX.Y.Z — Page Title"
         with ui.row().classes("items-center gap-2"):
             if ctx.icon:
                 ui.html(
@@ -57,6 +74,7 @@ def make_header(_, page_title: str = ""):
                 f"color: {YELLOW}"
             )
         ui.space()
+        # -- Menu toggle button (right-aligned)
         with ui.row().classes("items-center gap-4"):
             ui.button(
                 icon="menu",
@@ -65,7 +83,13 @@ def make_header(_, page_title: str = ""):
 
 
 def make_drawer(_):
-    """Shared left navigation drawer."""
+    """Build the shared left navigation drawer.
+
+    Contains navigation links (Dashboard, Projects, Browse, SQL Editor,
+    Import/Export), external links (API docs, documentation), and a
+    logout button.  The drawer instance is stored in the module-level
+    ``_drawer`` variable so the header menu button can toggle it.
+    """
     global _drawer
     with ui.left_drawer().classes("bg-[#1a1a1a]").props("bordered width=200") as _drawer:
 
@@ -74,7 +98,8 @@ def make_drawer(_):
             "text-h6 text-bold q-mb-xs"
         ).style(f"color: {YELLOW}")
         """
-        
+
+        # -- Navigation links: each item navigates to its target route.
         for label, target, icon in [
             (_("dashboard"), "/", "dashboard"),
             (_("projects"), "/projects", "folder_open"),
@@ -89,6 +114,7 @@ def make_drawer(_):
                     ui.icon(icon).style(f"color: {NAV_COLOR}")
                 ui.item_section(label)
 
+        # -- External link: opens the Swagger/OpenAPI docs in a new tab.
         with ui.item(
             on_click=lambda: ui.run_javascript('window.open("/docs", "_blank")')
         ).style("color: #2296f3;").props("clickable"):
@@ -96,6 +122,7 @@ def make_drawer(_):
                 ui.icon("api").style("color: #2296f3;")
             ui.item_section("API")
 
+        # -- External link: opens the project documentation in a new tab.
         with ui.item(
             on_click=lambda: ui.run_javascript(f'window.open("{ctx.DOCS_URL}", "_blank")')
         ).style("color: #2296f3;").props("clickable"):
@@ -103,6 +130,7 @@ def make_drawer(_):
                 ui.icon("menu_book").style("color: #2296f3;")
             ui.item_section("Docs")
 
+        # -- Logout: clears session and redirects to /login.
         with ui.item(
             on_click=do_logout
         ).style("color: #f54336;").props("clickable"):
@@ -112,11 +140,16 @@ def make_drawer(_):
 
 
 def make_footer(_):
-    """Shared footer for all pages."""
+    """Build the shared bottom footer bar.
+
+    Displays copyright notice, quick links (API, Docs, GitHub, Donate),
+    and the currently logged-in username.  All links open in new tabs.
+    """
     from webduck.pages.context import AUTUMO_URL, DONATE_URL, YELLOW_DARKER
     with ui.footer().classes("bg-[#040d12] items-center").style("border-top: 0.9px solid #0c2736;"):
         with ui.row().classes("items-center gap-4 w-full justify-center"):
 
+            # -- Copyright block: autumo logo + "© 2026 autumo GmbH — Licensed under MIT"
             with ui.row().classes("items-center gap-1"):
                 ui.html(
                     '<img src="/static/footer-logo.png" style="height: 16px; width: auto; filter: brightness(0.65);">'
@@ -131,6 +164,7 @@ def make_footer(_):
 
             ui.label("|").style("color: #444;")
 
+            # -- API link: opens /docs (Swagger UI) in a new tab.
             ui.label("API").style("color: #565656; font-size: 0.9em; cursor: pointer;").on(
                 "click", lambda: ui.run_javascript('window.open("/docs", "_blank")')
             ).on("mouseover", lambda e: e.sender.style("color: #444")).on(
@@ -139,6 +173,7 @@ def make_footer(_):
 
             ui.label("|").style("font-size: 0.9em; color: #444;")
 
+            # -- Docs link: opens the project documentation site.
             ui.link(
                 "Docs",
                 ctx.DOCS_URL,
@@ -147,12 +182,14 @@ def make_footer(_):
 
             ui.label("|").style("font-size: 0.9em; color: #444;")
 
+            # -- GitHub link: opens the source repository.
             ui.label("GitHub").style("color: #666; font-size: 0.9em; cursor: pointer;").on(
                 "click", lambda: ui.run_javascript('window.open("https://github.com/autumoswitzerland/Webduck", "_blank")')
             )
 
             ui.label("|").style("font-size: 0.9em; color: #444;")
 
+            # -- Donate link: opens the PayPal donation page.
             ui.label("Donate").style("color: #666; font-size: 0.9em; cursor: pointer;").on(
                 "click", lambda: ui.run_javascript(f'window.open("{DONATE_URL}", "_blank")')
             ).on("mouseover", lambda e: e.sender.style("color: #444")).on(
@@ -161,6 +198,7 @@ def make_footer(_):
 
             ui.label("|").style("font-size: 0.9em; color: #444;")
 
+            # -- Logged-in username display (read from NiceGUI user storage).
             username = nicegui_app.storage.user.get("username", "")
             with ui.row().classes("items-center gap-1"):
                 ui.label(f"{_('username')}:").style("color: #666; font-size: 0.9em;")

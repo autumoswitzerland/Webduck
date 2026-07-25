@@ -9,7 +9,12 @@
 # of this software.
 # ------------------------------------------------------------------------------
 
-"""Login page."""
+"""Login page.
+
+Handles browser language auto-detection via the Accept-Language header,
+JWT-based session creation, and a language selector that persists the
+user's choice across sessions.
+"""
 
 from fastapi import Request
 from nicegui import app as nicegui_app
@@ -21,6 +26,7 @@ from webduck.pages.ui_helpers import apply_dark_theme
 
 
 def register():
+    """Register the ``/login`` page route with NiceGUI."""
     from webduck.i18n import (
         get_language_name,
         get_supported_languages,
@@ -29,12 +35,17 @@ def register():
 
     @ui.page("/login")
     def login_page(request: Request):
+        # ---------------------------------------------------------------
+        # Language detection: Accept-Language header → saved preference → "en"
+        # The first two characters of the header give us the ISO 639-1 code.
+        # ---------------------------------------------------------------
         browser_lang = request.headers.get(
             "accept-language", "en"
         )[:2]
         saved_lang = nicegui_app.storage.user.get(
             "language", browser_lang
         )
+        # Fall back to English if the stored language is no longer supported.
         if saved_lang not in get_supported_languages():
             saved_lang = "en"
         nicegui_app.storage.user["language"] = saved_lang
@@ -45,9 +56,11 @@ def register():
 
         with ui.column().classes("fixed-center items-center gap-6"):
 
+            # -- Login card: icon + version title, credential fields, button
             with ui.card().style(
                 f"background: {BG_CARD}; padding: 20px 24px 20px 24px;"
             ):
+                # -- Branding row: optional icon + "WebDuck vX.Y.Z"
                 with ui.row().classes("items-center gap-2"):
                     if ctx.icon:
                         ui.html(
@@ -66,6 +79,13 @@ def register():
                 ).classes("w-full")
 
                 def handle_login():
+                    """Verify credentials, create JWT, store in session, and redirect.
+
+                    On failure a warning is logged and the user sees a
+                    negative notification.  Both bad credentials and
+                    unexpected errors produce the same user-facing message
+                    to avoid leaking system details.
+                    """
                     try:
                         if ctx.auth.verify_user(username.value, password.value):
                             token = ctx.auth.create_jwt_token(username.value)
@@ -87,6 +107,7 @@ def register():
                             _("invalid_credentials"), type="negative"
                         )
 
+                # Allow pressing Enter anywhere in the form to submit.
                 ui.on("keydown.enter", handle_login)
 
                 ui.space().classes("h-3")
@@ -97,6 +118,8 @@ def register():
 
                 ui.space().classes("h-3")
 
+                # -- Language selector: changes language and reloads the page
+                #    to re-render all UI strings in the chosen locale.
                 lang_options = {
                     code: get_language_name(code)
                     for code in get_supported_languages()

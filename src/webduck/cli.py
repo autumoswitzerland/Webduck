@@ -14,7 +14,12 @@
 #  ---------------------------------------------------------------------------
 #  Command-line interface entry point. Delegates to main.main().
 #
-#  Usage:
+#  This module exists solely to provide a thin wrapper around ``main()``
+#  so that the ``[project.scripts]`` entry in ``pyproject.toml`` can
+#  point to ``webduck.cli:main`` without importing the heavier ``main``
+#  module at tab-completion time (Click can lazily load subcommands).
+#
+#  Usage (after ``pip install webduck``):
 #    webduck init     — Initialize WebDuck (create admin user)
 #    webduck start    — Start the WebDuck server
 #    webduck status   — Show WebDuck status
@@ -25,7 +30,18 @@
 #  Date:      2026-07-20
 # =============================================================================
 
-"""WebDuck CLI entry point."""
+"""WebDuck CLI entry point.
+
+This module is referenced by the ``webduck`` console script in
+``pyproject.toml``::
+
+    [project.scripts]
+    webduck = "webduck.cli:main"
+
+Running ``webduck --help`` triggers this module which imports and calls
+``main()`` from ``webduck.main``, where the actual Click command group
+lives.
+"""
 
 from webduck.main import main
 
