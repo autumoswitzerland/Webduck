@@ -232,6 +232,15 @@ FastAPI ──┬── /admin/*   (JWT auth)    → Project/DB management
 - **Logging:** Rotated log files in `log/` (configurable), independent console logging
 - **Concurrency:** Single-writer via file-level locks (apps manage write contention)
 
+## Screenshots
+
+<table>
+<tr>
+<td align="center"><strong>Projects</strong><br><a href="src/webduck/static/screen_projects.webp"><img src="src/webduck/static/screen_projects.webp" width="450"></a></td>
+<td align="center"><strong>Browse View</strong><br><a href="src/webduck/static/screen_browse.webp"><img src="src/webduck/static/screen_browse.webp" width="450"></a></td>
+</tr>
+</table>
+
 ## Development
 
 ```bash
