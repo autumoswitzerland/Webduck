@@ -202,10 +202,12 @@ def register():
                     return
 
                 # Show a modal spinner while the import runs.
-                with ui.dialog() as dlg, ui.card().style(
-                    f"background: {BG_CARD};"
-                    " min-width: 320px;"
-                    " text-align: center;"
+                with ui.dialog() as dlg, ui.card().classes(
+                    "items-center gap-4"
+                ).style(
+                    f"background: {BG_CARD}; "
+                    "border-radius: 12px; "
+                    "padding: 32px 48px;"
                 ):
                     ui.spinner(size="xl", color="amber")
                     ui.label(_("importing")).style(f"color: {YELLOW_LIGHT}")

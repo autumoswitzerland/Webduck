@@ -393,7 +393,7 @@ def register():
                 with ui.dialog() as progress_dialog, ui.card().classes(
                     "items-center gap-4"
                 ).style(
-                    "background: #1E1E1E; "
+                    f"background: {BG_CARD}; "
                     "border-radius: 12px; "
                     "padding: 32px 48px;"
                 ):
