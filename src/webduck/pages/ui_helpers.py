@@ -173,8 +173,6 @@ def make_footer(_):
 
             ui.label("|").style("font-size: 0.9em; color: #444;")
 
-            ui.label("|").style("font-size: 0.9em; color: #444;")
-
             # -- GitHub link: opens the source repository.
             ui.label("GitHub").style("color: #666; font-size: 0.9em; cursor: pointer;").on(
                 "click", lambda: ui.run_javascript('window.open("https://github.com/autumoswitzerland/Webduck", "_blank")')
