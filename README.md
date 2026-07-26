@@ -123,7 +123,7 @@ server:
   data_dir: data
   host: 0.0.0.0
   port: 8998
-  max_upload_mb: 5
+  max_upload_mb: 256
 ```
 
 ## Web UI Pages
