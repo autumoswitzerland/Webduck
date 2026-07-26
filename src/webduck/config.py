@@ -19,7 +19,6 @@
 #
 #  Project:   WebDuck
 #  Author:    autumo GmbH
-#  Version:   1.0.0
 #  Date:      2026-07-20
 # =============================================================================
 
@@ -33,6 +32,7 @@ silently ignored by Pydantic (``model_config`` uses the default strict=False).
 Loading flow:
     1. ``load_config()`` reads the YAML file (or returns a fully-default config).
     2. YAML dict is unpacked directly into ``WebDuckConfig(**data)``; Pydantic
+       handles validation and type coercion.
        fills in any missing keys with the model defaults.
     3. If the file doesn't exist, a fresh ``WebDuckConfig()`` with all defaults
        is returned so the server can start without a pre-existing config.
@@ -44,6 +44,7 @@ Saving flow:
        readable block-style output.
 """
 
+from importlib.metadata import version as _get_version
 from pathlib import Path
 
 import yaml
@@ -142,6 +143,23 @@ class LoggingConfig(BaseModel):
     console: ConsoleLoggingConfig = Field(default_factory=ConsoleLoggingConfig)
 
 
+def _detect_version() -> str:
+    """Return package version.
+
+    Check local pyproject.toml first (development), but only if it's OUR
+    project (contains ``name = "webduck"``).  Fall back to installed metadata.
+    """
+    pyproject = Path(__file__).resolve().parent.parent.parent / "pyproject.toml"
+    if pyproject.exists():
+        content = pyproject.read_text()
+        if 'name = "webduck"' in content or "name = 'webduck'" in content:
+            for line in content.splitlines():
+                if line.strip().startswith("version"):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+    # Installed via pip/pipx — read from package metadata
+    return _get_version("webduck")
+
+
 class WebDuckConfig(BaseModel):
     """Main WebDuck configuration — top-level model.
 
@@ -150,7 +168,7 @@ class WebDuckConfig(BaseModel):
     factory so the server can start without any ``webduck.yaml`` file at all.
     """
 
-    version: str = "1.0.0"
+    version: str = Field(default_factory=_detect_version)
     icon: str = "icon.svg"
     server: ServerConfig = Field(default_factory=ServerConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
@@ -172,6 +190,9 @@ def load_config(config_path: Path | None = None) -> WebDuckConfig:
         # safe_load prevents YAML deserialisation attacks (arbitrary objects)
         with open(config_path) as f:
             data = yaml.safe_load(f)
+        # Remove stale version key — version always comes from the package
+        if isinstance(data, dict):
+            data.pop("version", None)
         # If the file is empty YAML returns None; treat that as defaults
         return WebDuckConfig(**data) if data else WebDuckConfig()
     return WebDuckConfig()
@@ -184,7 +205,7 @@ def save_config(config: WebDuckConfig, config_path: Path) -> None:
     strings (YAML doesn't natively support Python ``Path`` objects), and
     writes block-style YAML for human readability.
     """
-    data = config.model_dump()
+    data = config.model_dump(exclude={"version"})
     # Convert Path objects to strings for YAML serialization
     if "server" in data and "data_dir" in data["server"]:
         data["server"]["data_dir"] = str(data["server"]["data_dir"])
