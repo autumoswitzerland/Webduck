@@ -8,6 +8,9 @@ on:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/webduck
     permissions:
       id-token: write
     steps:
