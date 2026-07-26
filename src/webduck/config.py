@@ -151,7 +151,7 @@ class WebDuckConfig(BaseModel):
     """
 
     version: str = "1.0.0"
-    icon: str = ""
+    icon: str = "icon.svg"
     server: ServerConfig = Field(default_factory=ServerConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
