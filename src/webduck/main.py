@@ -80,6 +80,9 @@ _project_auth: ProjectAuth | None = None
 _version: str = ""
 _icon: str = ""
 
+# In-memory store for pending CSV exports: token -> Path.
+_export_tokens: dict[str, Path] = {}
+
 # ---------------------------------------------------------------------------
 # Global dark-theme CSS injected into every NiceGUI page via ui.add_head_html().
 #
@@ -248,6 +251,8 @@ def setup_app(cfg: WebDuckConfig) -> FastAPI:
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     # --- REST API routers ---
+    admin_api.set_dependencies(_auth, _storage)
+    db_api.set_dependencies(_storage)
     app.include_router(admin_api.router)
     app.include_router(db_api.router)
 
@@ -268,9 +273,6 @@ def setup_app(cfg: WebDuckConfig) -> FastAPI:
     from fastapi import Request
     from fastapi.responses import JSONResponse, FileResponse
     import secrets as _secrets
-
-    # In-memory store for pending CSV exports: token -> Path.
-    _export_tokens: dict[str, Path] = {}
 
     @app.get("/export/{token}")
     async def export_download(token: str):

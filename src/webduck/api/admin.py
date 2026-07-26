@@ -40,7 +40,7 @@ from pydantic import BaseModel
 
 from webduck.auth.manager import AuthManager
 from webduck.logging import log_error, log_warning
-from webduck.storage.engine import StorageEngine
+from webduck.storage.engine import StorageEngine, RESERVED_DUCKDB_NAMES
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -260,6 +260,9 @@ async def create_database(
     if not storage_engine:
         log_error("create_database: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
+
+    if req.name.lower() in RESERVED_DUCKDB_NAMES:
+        raise HTTPException(status_code=400, detail=f"'{req.name}' is a reserved DuckDB name")
 
     if storage_engine.database_exists(project, req.name):
         log_warning(f"create_database: Database '{req.name}' already exists in '{project}'")

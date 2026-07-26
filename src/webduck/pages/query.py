@@ -28,6 +28,7 @@ from nicegui import ui
 
 from webduck.pages import context as ctx
 from webduck.pages.context import (
+    BG_CARD,
     TEXT_DIM,
     TEXT_SOFT,
     YELLOW,

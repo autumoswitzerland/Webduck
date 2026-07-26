@@ -312,9 +312,9 @@ def register():
 
                 # Show a modal spinner while the export runs.
                 with ui.dialog() as dlg, ui.card().style(
-                    f"background: {BG_CARD};"
-                    " min-width: 320px;"
-                    " text-align: center;"
+                    f"background: {BG_CARD}; "
+                    "border-radius: 12px; "
+                    "padding: 32px 48px;"
                 ):
                     ui.spinner(size="xl", color="amber")
                     ui.label(_("exporting")).style(f"color: {YELLOW_LIGHT}")

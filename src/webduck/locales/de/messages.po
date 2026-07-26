@@ -268,6 +268,9 @@ msgstr "Geladen: %s"
 msgid "no_file_loaded"
 msgstr "Keine Datei hochgeladen"
 
+msgid "reserved_name"
+msgstr "Dieser Name ist von DuckDB reserviert und kann nicht verwendet werden"
+
 msgid "statement_executed"
 msgstr "%d Anweisung erfolgreich ausgeführt"
 

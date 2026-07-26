@@ -403,6 +403,13 @@ def register():
                                     db_password=new_db_password,
                                 ):
                                     if db_name.value:
+                                        from webduck.storage.engine import RESERVED_DUCKDB_NAMES
+                                        if db_name.value.lower() in RESERVED_DUCKDB_NAMES:
+                                            ui.notify(
+                                                _("reserved_name"),
+                                                type="negative",
+                                            )
+                                            return
                                         ok = ctx.storage.create_database(
                                             p, db_name.value
                                         )

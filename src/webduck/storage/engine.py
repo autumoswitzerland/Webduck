@@ -32,6 +32,12 @@ from typing import Any
 
 import duckdb
 
+# DuckDB reserved catalog / database names.
+# "main", "temp", and "system" are internal catalog names — using them as
+# a user-defined database filename causes ambiguous references and silent
+# failures (e.g. duckdb_tables() returns wrong database_name).
+RESERVED_DUCKDB_NAMES = {"main", "temp", "system"}
+
 
 class StorageEngine:
     """DuckDB storage engine with file-locking for concurrent access."""
@@ -161,7 +167,13 @@ class StorageEngine:
         We open and immediately close a DuckDB connection here because
         DuckDB creates the .duckdb file lazily on connect — the file
         won't exist until a connection is opened at least once.
+
+        Returns False if the database name is reserved by DuckDB
+        (e.g. "main", "temp", "system") or already exists.
         """
+        if database.lower() in RESERVED_DUCKDB_NAMES:
+            return False
+
         project_dir = self.data_dir / project
         project_dir.mkdir(parents=True, exist_ok=True)
 

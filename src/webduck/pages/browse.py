@@ -261,8 +261,9 @@ def register():
                         if isinstance(e.value, list)
                         else [e.value]
                     )
-                    if not selected:
+                    if not selected or selected[0] is None:
                         return
+                    
                     node_id = selected[0]
                     if "/" not in node_id:
                         return
@@ -582,9 +583,16 @@ def register():
                                     )
                                     if not info:
                                         return
+                                    
+                                    # Consume the event immediately.
                                     ui.run_javascript(
                                         "window._eci = null"
                                     )
+                                
+                                    # Views are not editable.
+                                    if obj_type == "views":
+                                        return
+                                        
                                     d = json.loads(info)
                                     ri, cn, ov = (
                                         d["r"], d["c"], d["v"]
