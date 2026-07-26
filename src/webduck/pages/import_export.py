@@ -223,10 +223,11 @@ def register():
                         Path(_uploaded_file[0]),
                     )
 
-                    # Clean up the temp file regardless of success/failure.
-                    Path(_uploaded_file[0]).unlink(missing_ok=True)
-                    _uploaded_file[0] = None
-                    _uploaded_name[0] = None
+                    # Only clean up on success — keep file for retry on error.
+                    if result.get("success"):
+                        Path(_uploaded_file[0]).unlink(missing_ok=True)
+                        _uploaded_file[0] = None
+                        _uploaded_name[0] = None
                 except Exception as e:
                     from webduck.logging import log_error
                     log_error(f"CSV import error [{project_select.value}/{database_select.value}]: {e}")
@@ -239,8 +240,10 @@ def register():
                     import_result_area.clear()
                     if result.get("success"):
                         ui.label(_("import_success")).style("color: #66BB6A")
-                        # Reset the upload component.
+                        # Reset upload, table name, and refresh export list.
                         upload.reset()
+                        table_name_input.value = ""
+                        update_tables()
                     else:
                         ui.label(result.get("error", "Import failed")).style("color: #f64337")
 
@@ -295,9 +298,9 @@ def register():
                 2. Show a spinner dialog while the export runs.
                 3. Call ``export_csv`` in a background thread to write
                    a temp CSV file.
-                4. Read the file, base64-encode it, and trigger a
-                   browser download via a data URL.
-                5. Clean up the temp file and display the result.
+                4. Register a download token and redirect the browser
+                   to ``/export/<token>`` — no base64, no WebSocket.
+                5. Clean up the temp file after a short delay.
                 """
                 if not database_select.value:
                     ui.notify(_("select_database"), type="warning")
@@ -317,7 +320,8 @@ def register():
                     ui.label(_("exporting")).style(f"color: {YELLOW_LIGHT}")
                 dlg.open()
 
-                # Temp file path for the exported CSV.
+                import secrets
+                token = secrets.token_urlsafe(16)
                 csv_path = Path(f"/tmp/webduck_export_{table_select.value}.csv")
                 try:
                     # Run the export in a background thread to keep the UI responsive.
@@ -329,26 +333,25 @@ def register():
                         csv_path,
                     )
                     if result.get("success") and csv_path.exists():
-                        csv_content = csv_path.read_text()
-                        # Base64-encode and trigger a browser download via data URL.
-                        import base64
-                        b64 = base64.b64encode(csv_content.encode()).decode()
+                        from webduck.main import _export_tokens
+                        _export_tokens[token] = csv_path
                         filename = f"{table_select.value}.csv"
                         ui.run_javascript(f"""
                             var a = document.createElement('a');
-                            a.href = 'data:text/csv;base64,{b64}';
+                            a.href = '/export/{token}';
                             a.download = '{filename}';
                             document.body.appendChild(a);
                             a.click();
                             document.body.removeChild(a);
                         """)
+                    else:
+                        csv_path.unlink(missing_ok=True)
                 except Exception as e:
                     from webduck.logging import log_error
                     log_error(f"CSV export error [{project_select.value}/{database_select.value}]: {e}")
                     result = {"success": False, "error": str(e)}
-                finally:
-                    # Always clean up the temp file and close the spinner.
                     csv_path.unlink(missing_ok=True)
+                finally:
                     dlg.close()
 
                 with export_result_area:

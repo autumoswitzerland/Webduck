@@ -267,7 +267,25 @@ def setup_app(cfg: WebDuckConfig) -> FastAPI:
         return RedirectResponse(url="/ui")
 
     from fastapi import Request
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, FileResponse
+    import secrets as _secrets
+
+    # In-memory store for pending CSV exports: token -> Path.
+    _export_tokens: dict[str, Path] = {}
+
+    @app.get("/export/{token}")
+    async def export_download(token: str):
+        """Serve a pending CSV export and clean up after download."""
+        csv_path = _export_tokens.pop(token, None)
+        if csv_path is None or not csv_path.exists():
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Export not found or expired")
+        return FileResponse(
+            path=str(csv_path),
+            filename=csv_path.name,
+            media_type="text/csv",
+            background=None,
+        )
 
     @app.post("/api/reorder-projects")
     async def reorder_projects_ui(request: Request):
