@@ -213,11 +213,15 @@ curl -X POST http://localhost:8998/db/projects/myapp/databases/main/query \
 
 ## Docker
 
+Run WebDuck with Docker Compose:
+
 ```bash
 docker compose up -d
 ```
 
-The data directory is mounted at `./data`. Initialize with:
+WebDuck stores its data in `/app/data` inside the container. The provided Docker Compose configuration persists this data using the `webduck_data` volume.
+
+Initialize with:
 
 ```bash
 docker compose exec webduck webduck init
