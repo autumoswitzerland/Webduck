@@ -18,14 +18,9 @@ RUN pip install --no-cache-dir .
 # Make entrypoint executable
 RUN chmod +x /entrypoint.sh
 
-# Create data directory
-RUN mkdir -p /data
-
 # Expose port
 EXPOSE 8998
 
-# Volume for persistent data
-VOLUME ["/data"]
-
 ENTRYPOINT ["/entrypoint.sh"]
+
 CMD ["webduck", "start", "--host", "0.0.0.0", "--port", "8998"]
