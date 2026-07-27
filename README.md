@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="src/webduck/static/icon.svg" width="128">
+  <img src="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/icon.svg" width="128">
   <h1>WebDuck</h1>
 
   A self-hosted DuckDB-as-a-Service server with REST API and Web UI.
@@ -7,7 +7,7 @@
   a ready-to-use administration interface for DuckDB databases and data analytics
   — out of the box, just like the database admin tools that come with any hosting package.
 
-  <img src="https://img.shields.io/badge/version-1.1.0-FFD54F">
+  <img src="https://img.shields.io/badge/version-1.2.0-FFD54F">
   <img src="https://img.shields.io/badge/license-MIT-green">
   <img src="https://img.shields.io/badge/python-3.11+-blue">
 
@@ -40,8 +40,8 @@
 
 <table>
 <tr>
-<td align="center"><strong>Projects</strong><br><a href="src/webduck/static/screen_projects.webp"><img src="src/webduck/static/screen_projects.webp" width="450"></a></td>
-<td align="center"><strong>Browse View</strong><br><a href="src/webduck/static/screen_browse.webp"><img src="src/webduck/static/screen_browse.webp" width="450"></a></td>
+<td align="center"><strong>Projects</strong><br><a href="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/screen_projects.webp"><img src="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/screen_projects.webp" width="450"></a></td>
+<td align="center"><strong>Browse View</strong><br><a href="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/screen_browse.webp"><img src="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/screen_browse.webp" width="450"></a></td>
 </tr>
 </table>
 

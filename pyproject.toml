@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "webduck"
-version = "1.1.0"
+version = "1.2.0"
 description = "A DuckDB server with REST API and Web UI"
 readme = "README.md"
 license = "MIT"
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["duckdb", "database", "server", "api"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
