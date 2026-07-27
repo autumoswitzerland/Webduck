@@ -170,8 +170,8 @@ Databases without a password set are publicly accessible.
 | `POST` | `/db/projects/{project}/databases/{db}/query` | Execute SQL (read-only) |
 | `POST` | `/db/projects/{project}/databases/{db}/write` | Execute SQL (read-write) |
 | `GET` | `/db/projects/{project}/databases/{db}/tables` | List tables + columns |
-| `POST` | `/db/projects/{project}/databases/{db}/import` | Import CSV/Parquet/JSON |
-| `GET` | `/db/projects/{project}/databases/{db}/export` | Export table to CSV/Parquet/JSON |
+| `POST` | `/db/projects/{project}/databases/{db}/import/{tbl}` | Import CSV/Parquet/JSON |
+| `GET` | `/db/projects/{project}/databases/{db}/export/{tbl}` | Export table to CSV/Parquet/JSON |
 
 ### Example: Login + Query
 

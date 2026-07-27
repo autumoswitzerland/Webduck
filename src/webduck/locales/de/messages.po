@@ -177,11 +177,11 @@ msgstr "Spalten"
 msgid "rows"
 msgstr "Zeilen"
 
-msgid "import_csv"
-msgstr "CSV importieren"
+msgid "import_file"
+msgstr "Datei importieren"
 
-msgid "export_csv"
-msgstr "CSV exportieren"
+msgid "export_file"
+msgstr "Datei exportieren"
 
 # Errors
 msgid "error"

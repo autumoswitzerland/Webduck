@@ -17,13 +17,13 @@
 #  Authentication via X-Project-Key header (project:password).
 #
 #  Endpoints:
-#    GET  /db/projects                                          — List projects
+#    GET  /db/projects                                           — List projects
 #    GET  /db/projects/{project}/databases                       — List databases
 #    POST /db/projects/{project}/databases/{db}/query            — Execute SELECT
 #    POST /db/projects/{project}/databases/{db}/write            — Execute INSERT/UPDATE/DELETE
 #    GET  /db/projects/{project}/databases/{db}/tables           — List tables
-#    POST /db/projects/{project}/databases/{db}/import/csv       — Import CSV
-#    GET  /db/projects/{project}/databases/{db}/export/csv/{tbl} — Export CSV
+#    POST /db/projects/{project}/databases/{db}/import/{tbl}     — Import CSV, JSON, Parquet
+#    GET  /db/projects/{project}/databases/{db}/export/{tbl}     — Export CSV, JSON, Parquet
 #
 #  Project:   WebDuck
 #  Author:    autumo GmbH
@@ -248,53 +248,67 @@ async def list_tables(
 
 
 # ---------------------------------------------------------------------------
-#  CSV Import
+#  Import
 # ---------------------------------------------------------------------------
-#  Imports a CSV file from disk into a new or existing DuckDB table.
+#  Imports a file from disk into a DuckDB table.
 #
-#  The csv_path must be an absolute path on the server filesystem that
-#  DuckDB can access. DuckDB's CSV reader auto-detects:
-#    - Delimiter (comma, semicolon, tab, etc.)
-#    - Header rows
-#    - Column types (strings, integers, dates, etc.)
-#    - Quoting and escape characters
+#  The path must be an absolute path on the server filesystem that
+#  DuckDB can access. The file format can be specified explicitly via
+#  `format`. If no format is specified, the format is auto-detected from
+#  the file extension.
 #
-#  If the target table already exists, DuckDB appends rows to it.
-#  If it doesn't exist, DuckDB creates it automatically with inferred
-#  column types from the CSV data.
+#  Supported formats include:
+#    - CSV and delimiter-separated text files
+#    - JSON and NDJSON
+#    - Parquet
+#
+#  CSV and other delimiter-separated text files are processed using
+#  DuckDB's automatic CSV detection. For non-standard delimiters, the
+#  storage engine performs additional delimiter detection before passing
+#  the detected delimiter to DuckDB.
+#
+#  Column names and data types are inferred for CSV/text and JSON files,
+#  or read from the embedded schema for Parquet files.
+#  The target table is created or replaced during the import. If a table
+#  with the same name already exists, it is completely replaced.
 #
 #  Note: The max upload size is configured via `server.max_upload_mb` in
 #  webduck.yaml, but this endpoint operates on server-side file paths,
-#  not uploaded file content — the size limit applies to the NiceGUI UI
+#  not on uploaded file content — the size limit applies to the NiceGUI UI
 #  upload path, not to this REST endpoint directly.
 # ---------------------------------------------------------------------------
 
-@router.post("/projects/{project}/databases/{database}/import")
-async def import_csv(
+@router.post("/projects/{project}/databases/{database}/import/{table_name}")
+async def import_file(
     project: str,
     database: str,
     table_name: str,
-    csv_path: str,
+    path: str,
     format: str | None = None,
     password: str = Depends(verify_project_key),
 ) -> dict:
     """Import a file into a table.
 
-    Supported formats: CSV (default), Parquet, JSON.
-    Format is auto-detected from file extension if not specified.
+    Supported formats include CSV and delimiter-separated text files,
+    JSON/NDJSON, and Parquet. The format is auto-detected from the file
+    extension if not specified.
+
+    The target table is created or replaced. If a table with the same name
+    already exists, it is completely replaced.
+
     The path is a server-local file path.
-    """
+    """    
     if not storage_engine:
-        log_error("import_csv: Storage engine not initialized")
+        log_error("import: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
     # Write access is required — import creates or modifies table data.
     if not project_auth:
-        log_error("import_csv: Project auth not initialized")
+        log_error("import: Project auth not initialized")
         raise HTTPException(status_code=500, detail="Project auth not initialized")
 
     if not project_auth.has_database_access(project, database, password, "write"):
-        log_warning(f"import_csv: Write access denied for '{project}/{database}'")
+        log_warning(f"import: Write access denied for '{project}/{database}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Write access denied",
@@ -302,57 +316,63 @@ async def import_csv(
 
     # Path is wrapped in a Path object by the engine for safe resolution.
     # DuckDB's read functions handle the actual file I/O.
-    result = storage_engine.import_data(project, database, table_name, Path(csv_path), fmt=format)
+    result = storage_engine.import_data(project, database, table_name, Path(path), fmt=format)
     if not result.get("success"):
         log_error(f"Import failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return result
 
 
 # ---------------------------------------------------------------------------
-#  CSV Export
+#  Export
 # ---------------------------------------------------------------------------
-#  Exports a DuckDB table to a CSV file on the server filesystem.
+#  Exports a DuckDB table to a file on the server filesystem.
 #
-#  DuckDB's COPY TO statement is used, which produces standard CSV with:
-#    - Comma delimiter
-#    - Header row with column names
-#    - Standard quoting (double-quote around fields containing commas/newlines)
+#  The output format must be specified via `format` or is set to CSV by
+#  default. Supported formats include:
+#    - CSV
+#    - JSON
+#    - Parquet
 #
 #  The target table must already exist and be a regular table (not a view).
-#  DuckDB will overwrite the file if it already exists.
+#  The output file is written to the specified server-local path.
+#
+#  Existing files may be overwritten depending on the behavior of the
+#  underlying DuckDB COPY operation.
 # ---------------------------------------------------------------------------
 
-@router.get("/projects/{project}/databases/{database}/export")
-async def export_csv(
+@router.get("/projects/{project}/databases/{database}/export/{table_name}")
+async def export_file(
     project: str,
     database: str,
     table_name: str,
-    csv_path: str,
+    path: str,
     format: str = "csv",
     password: str = Depends(verify_project_key),
 ) -> dict:
     """Export a table to a file.
 
-    Supported formats: csv (default), parquet, json.
-    The csv_path is a server-local destination path.
+    Supported formats include CSV, JSON, and Parquet.
+    CSV is used by default if no format is specified.
+
+    The path is a server-local destination path.
     """
     if not storage_engine:
-        log_error("export_csv: Storage engine not initialized")
+        log_error("export: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
     # Write access is required — export writes a file to the server filesystem.
     if not project_auth:
-        log_error("export_csv: Project auth not initialized")
+        log_error("export: Project auth not initialized")
         raise HTTPException(status_code=500, detail="Project auth not initialized")
 
     if not project_auth.has_database_access(project, database, password, "write"):
-        log_warning(f"export_csv: Write access denied for '{project}/{database}'")
+        log_warning(f"export: Write access denied for '{project}/{database}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Write access denied",
         )
 
-    result = storage_engine.export_data(project, database, table_name, Path(csv_path), fmt=format)
+    result = storage_engine.export_data(project, database, table_name, Path(path), fmt=format)
     if not result.get("success"):
         log_error(f"Export failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return result
