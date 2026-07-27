@@ -56,13 +56,13 @@ pip install webduck
 ### Docker
 
 ```bash
-# docker-compose.yml herunterladen
+# Download docker-compose.yml
 curl -O https://raw.githubusercontent.com/autumoswitzerland/Webduck/main/docker-compose.yml
 
-# Passwort setzen
+# Set password
 export WEBDUCK_ADMIN_PASS=meinpasswort
 
-# Starten (Admin-User wird automatisch angelegt)
+# Start - An admin user is created automatically
 docker compose up -d
 ```
 
@@ -71,17 +71,17 @@ docker compose up -d
 ### pip
 
 ```bash
-# Initialisieren (Admin-User anlegen)
+# Initialize - Create an admin user
 webduck init
 
-# Server starten
+# Start server
 webduck start
 ```
 
 ### Docker
 
-Docker startet automatisch — UI unter `http://localhost:8998/ui/login`.
-Login mit `admin` / dem gesetzten Passwort.
+Docker starts automatically — UI at `http://localhost:8998/ui/login`.
+Log in with `admin` and the password you set.
 
 ## CLI Commands
 

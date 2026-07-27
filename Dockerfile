@@ -18,6 +18,12 @@ RUN pip install --no-cache-dir .
 # Make entrypoint executable
 RUN chmod +x /entrypoint.sh
 
+# Create application data directory
+RUN mkdir -p /app/data
+
+# Persistent data directory
+VOLUME ["/app/data"]
+
 # Expose port
 EXPOSE 8998
 
