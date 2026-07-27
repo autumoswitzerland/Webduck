@@ -317,6 +317,9 @@ msgstr "Aktualisiert"
 msgid "invalid_value"
 msgstr "Ungültiger Wert '%s' für Typ %s"
 
+msgid "duckdb_fk_note"
+msgstr "Dies könnte mit den Einschränkungen von DuckDB bei Aktualisierungen im Zusammenhang mit Fremdschlüsselbeziehungen zusammenhängen."
+
 # Import/Export
 msgid "import_export"
 msgstr "Import/Export"

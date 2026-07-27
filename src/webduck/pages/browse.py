@@ -625,6 +625,7 @@ def register():
                                         inp = ui.input(
                                             value=ov
                                         ).classes("w-full")
+                                        
                                         with ui.row().classes(
                                             "w-full gap-2 "
                                             "justify-end mt-2"
@@ -633,7 +634,7 @@ def register():
                                                 _("cancel"),
                                                 on_click=dlg.close,
                                             ).props(
-                                                "flat color=grey"
+                                                "outline color=grey"
                                             )
 
                                             async def _save():
@@ -736,6 +737,11 @@ def register():
                                                 pk_val = all_rows[
                                                     ri
                                                 ][pk_col]
+                                                
+                                                # print(f"SQL: {sql}")
+                                                # print(f"VAL: {nv}")
+                                                # print(f"PK : {pk_val}")
+                                                
                                                 r = (
                                                     await asyncio.to_thread(
                                                         ctx.storage.execute_query,
@@ -766,21 +772,34 @@ def register():
                                                     )
                                                     dlg.close()
                                                 else:
+                                                    # Note: DuckDB may report constraint errors when updating tables
+                                                    # with foreign-key relationships.
+                                                    error = str(r.get("error", "Update failed"))
+                                                    
+                                                    if "Constraint Error" in error:
+                                                        err_msg = _("duckdb_fk_note") + " " + error
+                                                    else:
+                                                        err_msg = error
+                                                    
                                                     ui.notification(
-                                                        r.get(
-                                                            "error",
-                                                            "Update "
-                                                            "failed",
-                                                        ),
+                                                        err_msg,
                                                         type="negative",
+                                                        timeout=None,
+                                                        close_button=True                                                        
                                                     )
 
                                             ui.button(
                                                 _("save"),
                                                 on_click=_save,
                                             ).props(
-                                                "flat color=positive"
+                                                "outline color=positive"
                                             )
+                                            inp.on(
+                                                "keydown.enter",
+                                                _save,
+                                            )
+
+                                        inp.run_method("focus")
                                     dlg.open()
 
                                 # Poll every 500ms for double-click edit events.

@@ -92,6 +92,10 @@ def register():
                 ui.button(
                     _("create_project"), on_click=create_project
                 ).props("outline").classes("border-button")
+                project_name.on(
+                    "keydown.enter",
+                    create_project,
+                )
 
         # ── Project list ───────────────────────────────────
         try:
@@ -441,6 +445,11 @@ def register():
                                     _("create_database"),
                                     on_click=create_db,
                                 ).props("outline color=amber").classes("border-button")
+                                new_db_name.on(
+                                    "keydown.enter",
+                                    create_db,
+                                )
+                                
         else:
             with ui.card().classes("w-full q-mt-sm"):
                 ui.label(_("no_projects_found")).classes(
