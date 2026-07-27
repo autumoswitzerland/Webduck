@@ -47,8 +47,8 @@ htmlcov/
 .ruff_cache/
 
 # Generated translations (compiled from .po files)
-locales/*/LC_MESSAGES/
-locales/*/LC_MESSAGES/*.mo
+src/webduck/locales/*/LC_MESSAGES/
+src/webduck/locales/*/LC_MESSAGES/*.mo
 
 # Runtime data
 data/
