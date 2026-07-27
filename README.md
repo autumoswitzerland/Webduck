@@ -7,7 +7,7 @@
   a ready-to-use administration interface for DuckDB databases and data analytics
   — out of the box, just like the database admin tools that come with any hosting package.
 
-  <img src="https://img.shields.io/badge/version-1.0.2-FFD54F">
+  <img src="https://img.shields.io/badge/version-1.1.0-FFD54F">
   <img src="https://img.shields.io/badge/license-MIT-green">
   <img src="https://img.shields.io/badge/python-3.11+-blue">
 
@@ -27,11 +27,11 @@
 - **SQL editor** — multi-statement support with sequential execution
 - **SQL upload** — execute multi-statement SQL scripts from files
 - **Browse view** — tree-based navigation of databases/tables/views with infinite scroll and cell editing
-- **Import/Export** — CSV import via drag & drop, CSV export with browser download
+- **Import/Export** — CSV, Parquet and JSON import via drag & drop, export with browser download
 - **Project ordering** — drag & drop reordering, persisted in `.projects.json`
 - **i18n** — English (default), German, extensible via PO/Gettext
 - **Configurable logging** — file rotation + console output, independently configurable
-- **Configurable upload size** — max file size for CSV/SQL uploads
+- **Configurable upload size** — max file size for uploads
 - **FK dependency hints** — DROP errors include referenced tables and constraint info
 - **Docker** support out of the box
 - **YAML configuration**
@@ -135,7 +135,7 @@ server:
 | Projects | `/ui/projects` | Create/delete projects, manage databases, set passwords, drag & drop reorder |
 | Queries | `/ui/query` | SQL editor (multi-statement) + SQL file upload |
 | Browse | `/ui/browse` | Tree navigation, table/view browsing with infinite scroll, cell editing |
-| Import/Export | `/ui/import` | CSV import (drag & drop) and export (browser download) |
+| Import/Export | `/ui/import` | CSV, Parquet and JSON import (drag & drop) and export (browser download) |
 
 ## REST API Reference
 
@@ -170,8 +170,8 @@ Databases without a password set are publicly accessible.
 | `POST` | `/db/projects/{project}/databases/{db}/query` | Execute SQL (read-only) |
 | `POST` | `/db/projects/{project}/databases/{db}/write` | Execute SQL (read-write) |
 | `GET` | `/db/projects/{project}/databases/{db}/tables` | List tables + columns |
-| `POST` | `/db/projects/{project}/databases/{db}/import` | Import CSV |
-| `GET` | `/db/projects/{project}/databases/{db}/export` | Export table to CSV |
+| `POST` | `/db/projects/{project}/databases/{db}/import` | Import CSV/Parquet/JSON |
+| `GET` | `/db/projects/{project}/databases/{db}/export` | Export table to CSV/Parquet/JSON |
 
 ### Example: Login + Query
 
@@ -227,7 +227,7 @@ docker compose exec webduck webduck init
 
 ```
 FastAPI ──┬── /admin/*   (JWT auth)    → Project/DB management
-          ├── /db/*      (project key) → SQL queries + CSV import/export
+          ├── /db/*      (project key) → SQL queries + CSV/Parquet/JSON import/export
           ├── /ui/*      (cookie)      → NiceGUI Web UI
           ├── /api/*     (session)     → Internal UI endpoints
           └── /health                  → Health check

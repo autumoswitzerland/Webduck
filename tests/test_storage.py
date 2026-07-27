@@ -1,5 +1,9 @@
 """Tests for webduck.storage.engine."""
 
+import json
+
+import duckdb
+
 
 
 
@@ -98,6 +102,114 @@ class TestStorageEngine:
         assert result["success"] is True
         assert out.exists()
         assert "Alice" in out.read_text()
+
+    def test_import_export_parquet(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+
+        # Create Parquet file
+        pq_file = tmp_data / "data.parquet"
+        con = duckdb.connect()
+        con.execute(
+            "CREATE TABLE t (id INTEGER, name VARCHAR, score DOUBLE)"
+        )
+        con.execute("INSERT INTO t VALUES (1, 'Alice', 95.5), (2, 'Bob', 87.3)")
+        con.execute(f"COPY t TO '{pq_file}' (FORMAT PARQUET)")
+        con.close()
+
+        result = storage.import_parquet("p", "db", "people", pq_file)
+        assert result["success"] is True
+
+        result = storage.execute_query("p", "db", "SELECT * FROM people ORDER BY id")
+        assert result["rows"] == [[1, "Alice", 95.5], [2, "Bob", 87.3]]
+
+        # Export
+        out = tmp_data / "out.parquet"
+        result = storage.export_parquet("p", "db", "people", out)
+        assert result["success"] is True
+        assert out.exists()
+
+        result = duckdb.sql(f"SELECT * FROM read_parquet('{out}') ORDER BY id").fetchall()
+        assert result == [(1, "Alice", 95.5), (2, "Bob", 87.3)]
+
+    def test_import_export_json(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+
+        # Write JSON
+        json_file = tmp_data / "data.json"
+        rows = [
+            {"id": 1, "name": "Alice"},
+            {"id": 2, "name": "Bob"},
+        ]
+        json_file.write_text(json.dumps(rows))
+
+        result = storage.import_json("p", "db", "people", json_file)
+        assert result["success"] is True
+
+        result = storage.execute_query("p", "db", "SELECT * FROM people ORDER BY id")
+        assert len(result["rows"]) == 2
+        assert result["rows"][0][1] == "Alice"
+        assert result["rows"][1][1] == "Bob"
+
+        # Export
+        out = tmp_data / "out.json"
+        result = storage.export_json("p", "db", "people", out)
+        assert result["success"] is True
+        assert out.exists()
+
+        exported = json.loads(out.read_text())
+        assert len(exported) == 2
+        assert exported[0]["name"] == "Alice"
+
+    def test_import_parquet_missing_file(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        result = storage.import_parquet("p", "db", "t", tmp_data / "nope.parquet")
+        assert result["success"] is False
+
+    def test_import_json_missing_file(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        result = storage.import_json("p", "db", "t", tmp_data / "nope.json")
+        assert result["success"] is False
+
+    def test_import_data_dispatch(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+
+        # CSV dispatch
+        csv_file = tmp_data / "d.csv"
+        csv_file.write_text("id,name\n1,Alice\n")
+        result = storage.import_data("p", "db", "t_csv", csv_file)
+        assert result["success"] is True
+
+        # Parquet dispatch
+        pq_file = tmp_data / "d.parquet"
+        con = duckdb.connect()
+        con.execute("CREATE TABLE t AS SELECT 1 AS id, 'Bob' AS name")
+        con.execute(f"COPY t TO '{pq_file}' (FORMAT PARQUET)")
+        con.close()
+        result = storage.import_data("p", "db", "t_pq", pq_file)
+        assert result["success"] is True
+
+        # JSON dispatch
+        json_file = tmp_data / "d.json"
+        json_file.write_text(json.dumps([{"id": 3, "name": "Charlie"}]))
+        result = storage.import_data("p", "db", "t_json", json_file)
+        assert result["success"] is True
+
+    def test_detect_format(self):
+        from pathlib import Path
+        from webduck.storage.engine import StorageEngine
+        assert StorageEngine.detect_format(Path("data.csv")) == "csv"
+        assert StorageEngine.detect_format(Path("data.tsv")) == "csv"
+        assert StorageEngine.detect_format(Path("data.txt")) == "csv"
+        assert StorageEngine.detect_format(Path("data.parquet")) == "parquet"
+        assert StorageEngine.detect_format(Path("data.json")) == "json"
+        assert StorageEngine.detect_format(Path("data.jsonl")) == "json"
+        assert StorageEngine.detect_format(Path("data.ndjson")) == "json"
+        assert StorageEngine.detect_format(Path("data.unknown")) == "csv"
 
     def test_list_projects_finds_dirs(self, storage, tmp_data):
         (tmp_data / "alpha").mkdir()

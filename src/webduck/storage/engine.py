@@ -504,3 +504,121 @@ class StorageEngine:
         """
         sql = f"COPY {table_name} TO '{csv_path}' (FORMAT CSV, HEADER)"
         return self.execute_query(project, database, sql, read_only=False)
+
+    # ------------------------------------------------------------------
+    #  Import/Export — Parquet
+    # ------------------------------------------------------------------
+
+    def import_parquet(
+        self,
+        project: str,
+        database: str,
+        table_name: str,
+        parquet_path: Path,
+    ) -> dict[str, Any]:
+        """Import a Parquet file into a table."""
+        if not parquet_path.exists():
+            return {"success": False, "error": f"Parquet file not found: {parquet_path}"}
+
+        sql = (
+            f"CREATE OR REPLACE TABLE {table_name} AS "
+            f"SELECT * FROM read_parquet('{parquet_path}')"
+        )
+        return self.execute_query(project, database, sql, read_only=False)
+
+    def export_parquet(
+        self,
+        project: str,
+        database: str,
+        table_name: str,
+        parquet_path: Path,
+    ) -> dict[str, Any]:
+        """Export a table to Parquet."""
+        sql = f"COPY {table_name} TO '{parquet_path}' (FORMAT PARQUET)"
+        return self.execute_query(project, database, sql, read_only=False)
+
+    # ------------------------------------------------------------------
+    #  Import/Export — JSON
+    # ------------------------------------------------------------------
+
+    def import_json(
+        self,
+        project: str,
+        database: str,
+        table_name: str,
+        json_path: Path,
+    ) -> dict[str, Any]:
+        """Import a JSON/NDJSON file into a table.
+
+        DuckDB's ``read_json_auto()`` handles both newline-delimited
+        JSON (NDJSON) and JSON arrays automatically.
+        """
+        if not json_path.exists():
+            return {"success": False, "error": f"JSON file not found: {json_path}"}
+
+        sql = (
+            f"CREATE OR REPLACE TABLE {table_name} AS "
+            f"SELECT * FROM read_json_auto('{json_path}')"
+        )
+        return self.execute_query(project, database, sql, read_only=False)
+
+    def export_json(
+        self,
+        project: str,
+        database: str,
+        table_name: str,
+        json_path: Path,
+    ) -> dict[str, Any]:
+        """Export a table to NDJSON (one JSON object per line)."""
+        sql = f"COPY {table_name} TO '{json_path}' (FORMAT JSON, ARRAY true)"
+        return self.execute_query(project, database, sql, read_only=False)
+
+    # ------------------------------------------------------------------
+    #  Import/Export — Format dispatcher
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def detect_format(file_path: Path) -> str:
+        """Detect file format by extension.
+
+        Returns one of: ``"csv"``, ``"parquet"``, ``"json"``.
+        Falls back to ``"csv"`` for unknown extensions.
+        """
+        ext = file_path.suffix.lower()
+        if ext == ".parquet":
+            return "parquet"
+        if ext in (".json", ".jsonl", ".ndjson"):
+            return "json"
+        return "csv"
+
+    def import_data(
+        self,
+        project: str,
+        database: str,
+        table_name: str,
+        file_path: Path,
+        fmt: str | None = None,
+    ) -> dict[str, Any]:
+        """Import a file into a table. Auto-detects format if not specified."""
+        if fmt is None:
+            fmt = self.detect_format(file_path)
+        if fmt == "parquet":
+            return self.import_parquet(project, database, table_name, file_path)
+        if fmt == "json":
+            return self.import_json(project, database, table_name, file_path)
+        return self.import_csv(project, database, table_name, file_path)
+
+    def export_data(
+        self,
+        project: str,
+        database: str,
+        table_name: str,
+        file_path: Path,
+        fmt: str = "csv",
+    ) -> dict[str, Any]:
+        """Export a table to a file in the given format."""
+        if fmt == "parquet":
+            return self.export_parquet(project, database, table_name, file_path)
+        if fmt == "json":
+            return self.export_json(project, database, table_name, file_path)
+        return self.export_csv(project, database, table_name, file_path)

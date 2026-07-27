@@ -291,7 +291,7 @@ def register():
             ">
                 {dsf}
                 <input type="file" id="sql-file-input"
-                    accept=".sql,.txt" style="display:none;">
+                    accept=".sql" style="display:none;">
                 <div id="sql-file-info"
                     style="margin-top: 8px; font-size: 0.9em;">
                 </div>
@@ -330,13 +330,22 @@ def register():
                     zone.style.borderColor = '#444';
                     zone.style.background = 'transparent';
                     var file = e.dataTransfer.files[0];
-                    if (file) readFile(file);
+                    if (file && file.name.toLowerCase().endsWith('.sql')) {{
+                        readFile(file);
+                    }} else if (file) {{
+                        alert('{_("only_sql_allowed")}');
+                    }}
                 }});
 
                 // Also handle click-to-upload via the hidden file input.
                 fileInput.addEventListener('change', function(e) {{
                     var file = e.target.files[0];
-                    if (file) readFile(file);
+                    if (file && file.name.toLowerCase().endsWith('.sql')) {{
+                        readFile(file);
+                    }} else if (file) {{
+                        alert('{_("only_sql_allowed")}');
+                        fileInput.value = '';
+                    }}
                 }});
 
                 function readFile(file) {{

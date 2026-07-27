@@ -80,7 +80,7 @@ _project_auth: ProjectAuth | None = None
 _version: str = ""
 _icon: str = ""
 
-# In-memory store for pending CSV exports: token -> Path.
+# In-memory store for pending exports: token -> Path.
 _export_tokens: dict[str, Path] = {}
 
 # ---------------------------------------------------------------------------
@@ -169,6 +169,9 @@ html {{
 }}
 .q-separator {{
     display: none !important;
+}}
+.q-tree__icon {{
+    color: #d0d0d0 !important;
 }}
 .text-caption {{
     color: {TEXT_DIM} !important;
@@ -276,16 +279,28 @@ def setup_app(cfg: WebDuckConfig) -> FastAPI:
 
     @app.get("/export/{token}")
     async def export_download(token: str):
-        """Serve a pending CSV export and clean up after download."""
-        csv_path = _export_tokens.pop(token, None)
-        if csv_path is None or not csv_path.exists():
+        """Serve a pending export and clean up after download."""
+        export_entry = _export_tokens.pop(token, None)
+        if export_entry is None:
             from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Export not found or expired")
+        export_path = export_entry["path"]
+        filename = export_entry["filename"]
+        if not export_path.exists():
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Export not found or expired")
+        suffix = export_path.suffix.lower()
+        media_types = {
+            ".csv": "text/csv; charset=utf-8",
+            ".parquet": "application/vnd.apache.parquet",
+            ".json": "application/json; charset=utf-8",
+            ".jsonl": "application/json; charset=utf-8",
+            ".ndjson": "application/json; charset=utf-8",
+        }
         return FileResponse(
-            path=str(csv_path),
-            filename=csv_path.name,
-            media_type="text/csv",
-            background=None,
+            path=str(export_path),
+            filename=filename,
+            media_type=media_types.get(suffix, "application/octet-stream"),
         )
 
     @app.post("/api/reorder-projects")

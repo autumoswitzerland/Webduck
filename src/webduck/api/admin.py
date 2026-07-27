@@ -40,7 +40,7 @@ from pydantic import BaseModel
 
 from webduck.auth.manager import AuthManager
 from webduck.logging import log_error, log_warning
-from webduck.storage.engine import StorageEngine, RESERVED_DUCKDB_NAMES
+from webduck.storage.engine import RESERVED_DUCKDB_NAMES, StorageEngine
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 

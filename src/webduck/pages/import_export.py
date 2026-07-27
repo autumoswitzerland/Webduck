@@ -9,16 +9,17 @@
 # of this software.
 # ------------------------------------------------------------------------------
 
-"""Import/Export page — CSV import via drag & drop, CSV export by table selection.
+"""Import/Export page — file import via drag & drop, export by table selection.
 
 **Import:** The user specifies a target table name and drags a file
 onto the upload zone (or clicks to open a file picker).  The file is
 sent directly to the server via HTTP multipart (no WebSocket limit),
-saved to a temp file, and imported via DuckDB's ``read_csv_auto``.
+saved to a temp file, and imported via DuckDB.  Format is auto-detected
+from the file extension (CSV, Parquet, JSON).
 
-**Export:** The user selects a table from the chosen database; the
-server writes it to a temp CSV file, which is then base64-encoded and
-triggered as a browser download via a data URL.
+**Export:** The user selects a table and format from the chosen database;
+the server writes it to a temp file, which is then triggered as a
+browser download via a download token.
 """
 
 import asyncio
@@ -60,6 +61,12 @@ def register():
         make_header(_)
         make_drawer(_)
         make_footer(_)
+
+        # Prevent browser from opening dropped files as URLs.
+        ui.run_javascript("""
+            document.addEventListener('dragover', function(e) { e.preventDefault(); });
+            document.addEventListener('drop', function(e) { e.preventDefault(); });
+        """)
 
         # ── Card 1: Project & Database Selection ────────────
         # Shared dropdowns for both import and export sections.
@@ -108,11 +115,11 @@ def register():
                 )
                 update_databases()
 
-        # ── Card 2: CSV Import ──────────────────────────────
+        # ── Card 2: Import ──────────────────────────────
         # File upload via HTTP multipart (NiceGUI ui.upload).
         # No WebSocket size limit — files go directly to the server.
         with ui.card().classes("w-full q-mt-sm"):
-            ui.label(_("csv_import")).classes(
+            ui.label(_("import")).classes(
                 "text-h5"
             ).style(f"color: {YELLOW_LIGHT}")
 
@@ -127,12 +134,16 @@ def register():
             async def on_upload(e):
                 """Handle file upload via HTTP multipart.
 
-                Saves the uploaded file content to a temp file on disk
-                so DuckDB can import it directly.
+                Only one file is active at a time. A second file
+                is silently rejected.
                 """
+                if _uploaded_file[0]:
+                    return
                 import tempfile
+                import os
+                ext = os.path.splitext(e.file.name)[1] or ".upload"
                 tmp = tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".upload"
+                    delete=False, suffix=ext
                 )
                 tmp.close()
                 await e.file.save(tmp.name)
@@ -145,7 +156,7 @@ def register():
                 max_file_size=ctx.max_upload_mb * 1024 * 1024,
                 label=_("drop_csv_file"),
                 multiple=False,
-            ).classes("w-full")
+            ).props('removable max-files="1" accept=".csv,.tsv,.txt,.parquet,.json,.jsonl,.ndjson"').classes("w-full")
 
             # Style the QUploader to match our dark theme.
             ui.add_css("""
@@ -180,12 +191,12 @@ def register():
             import_result_area = ui.card().classes("w-full mt-2 shadow-none")
 
             async def execute_import():
-                """Execute the CSV import workflow.
+                """Execute the import workflow.
 
                 1. Validate that a database and table name are selected.
                 2. Check that a file was uploaded.
                 3. Show a spinner dialog while the import runs.
-                4. Call ``import_csv`` in a background thread, then
+                4. Call ``import_data`` in a background thread, then
                    clean up the temp file.
                 5. Display success/error and reset the upload zone on success.
                 """
@@ -216,7 +227,7 @@ def register():
                 try:
                     # Run the import in a background thread to keep the UI responsive.
                     result = await asyncio.to_thread(
-                        ctx.storage.import_csv,
+                        ctx.storage.import_data,
                         project_select.value,
                         database_select.value,
                         table_name_input.value,
@@ -227,10 +238,9 @@ def register():
                     if result.get("success"):
                         Path(_uploaded_file[0]).unlink(missing_ok=True)
                         _uploaded_file[0] = None
-                        _uploaded_name[0] = None
                 except Exception as e:
                     from webduck.logging import log_error
-                    log_error(f"CSV import error [{project_select.value}/{database_select.value}]: {e}")
+                    log_error(f"Import error [{project_select.value}/{database_select.value}]: {e}")
                     result = {"success": False, "error": str(e)}
                 finally:
                     dlg.close()
@@ -239,7 +249,9 @@ def register():
                 with import_result_area:
                     import_result_area.clear()
                     if result.get("success"):
-                        ui.label(_("import_success")).style("color: #66BB6A")
+                        fmt_name = _uploaded_name[0].rsplit(".", 1)[-1].upper() if _uploaded_name[0] else "CSV"
+                        ui.label(_("import_success").format(fmt_name)).style("color: #66BB6A")
+                        _uploaded_name[0] = None
                         # Reset upload, table name, and refresh export list.
                         upload.reset()
                         table_name_input.value = ""
@@ -251,18 +263,23 @@ def register():
                 _("execute_import"), on_click=execute_import
             ).props("outline color=amber").classes("mt-2 border-button")
 
-        # ── Card 3: CSV Export ──────────────────────────────
-        # Select a table and download its contents as a CSV file.
-        # The export runs server-side; the result is sent to the
-        # browser as a base64 data URL for automatic download.
+        # ── Card 3: Export ──────────────────────────────
+        # Select a table and format, then download as a file.
         with ui.card().classes("w-full q-mt-sm"):
-            ui.label(_("csv_export")).classes(
+            ui.label(_("export")).classes(
                 "text-h5"
             ).style(f"color: {YELLOW_LIGHT}")
 
-            table_select = ui.select(
-                [], label=_("select_table")
-            ).classes("w-60")
+            with ui.row().classes("w-full gap-4 items-end"):
+                table_select = ui.select(
+                    [], label=_("select_table")
+                ).classes("w-60")
+
+                format_select = ui.select(
+                    ["csv", "parquet", "json"],
+                    label=_("format"),
+                    value="csv",
+                ).classes("w-40")
 
             def update_tables():
                 """Refresh the table dropdown when the database changes.
@@ -292,12 +309,12 @@ def register():
             export_result_area = ui.card().classes("w-full mt-2 shadow-none")
 
             async def execute_export():
-                """Execute the CSV export workflow.
+                """Execute the export workflow.
 
                 1. Validate that a database and table are selected.
                 2. Show a spinner dialog while the export runs.
-                3. Call ``export_csv`` in a background thread to write
-                   a temp CSV file.
+                3. Call ``export_data`` in a background thread to write
+                   a temp file in the selected format.
                 4. Register a download token and redirect the browser
                    to ``/export/<token>`` — no base64, no WebSocket.
                 5. Clean up the temp file after a short delay.
@@ -322,20 +339,26 @@ def register():
 
                 import secrets
                 token = secrets.token_urlsafe(16)
-                csv_path = Path(f"/tmp/webduck_export_{table_select.value}.csv")
+                fmt = format_select.value or "csv"
+                ext = {"csv": "csv", "parquet": "parquet", "json": "json"}.get(fmt, "csv")
+                export_path = Path(f"/tmp/webduck_export_{table_select.value}.{ext}")
                 try:
                     # Run the export in a background thread to keep the UI responsive.
                     result = await asyncio.to_thread(
-                        ctx.storage.export_csv,
+                        ctx.storage.export_data,
                         project_select.value,
                         database_select.value,
                         table_select.value,
-                        csv_path,
+                        export_path,
+                        fmt=fmt,
                     )
-                    if result.get("success") and csv_path.exists():
+                    if result.get("success") and export_path.exists():
                         from webduck.main import _export_tokens
-                        _export_tokens[token] = csv_path
-                        filename = f"{table_select.value}.csv"
+                        filename = f"{table_select.value}.{ext}"
+                        _export_tokens[token] = {
+                            "path": export_path,
+                            "filename": filename,
+                        }
                         ui.run_javascript(f"""
                             var a = document.createElement('a');
                             a.href = '/export/{token}';
@@ -345,19 +368,19 @@ def register():
                             document.body.removeChild(a);
                         """)
                     else:
-                        csv_path.unlink(missing_ok=True)
+                        export_path.unlink(missing_ok=True)
                 except Exception as e:
                     from webduck.logging import log_error
-                    log_error(f"CSV export error [{project_select.value}/{database_select.value}]: {e}")
+                    log_error(f"Export error [{project_select.value}/{database_select.value}]: {e}")
                     result = {"success": False, "error": str(e)}
-                    csv_path.unlink(missing_ok=True)
+                    export_path.unlink(missing_ok=True)
                 finally:
                     dlg.close()
 
                 with export_result_area:
                     export_result_area.clear()
                     if result.get("success"):
-                        ui.label(_("export_success")).style("color: #66BB6A")
+                        ui.label(_("export_success").format(fmt.upper())).style("color: #66BB6A")
                     else:
                         ui.label(result.get("error", "Export failed")).style("color: #f64337")
 

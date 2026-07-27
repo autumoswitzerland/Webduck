@@ -275,13 +275,14 @@ async def import_csv(
     database: str,
     table_name: str,
     csv_path: str,
+    format: str | None = None,
     password: str = Depends(verify_project_key),
 ) -> dict:
-    """Import a CSV file into a table.
+    """Import a file into a table.
 
-    The csv_path is a server-local path; DuckDB reads it directly via
-    its native CSV reader which handles auto-type-detection and
-    flexible delimiter handling.
+    Supported formats: CSV (default), Parquet, JSON.
+    Format is auto-detected from file extension if not specified.
+    The path is a server-local file path.
     """
     if not storage_engine:
         log_error("import_csv: Storage engine not initialized")
@@ -300,10 +301,10 @@ async def import_csv(
         )
 
     # Path is wrapped in a Path object by the engine for safe resolution.
-    # DuckDB's read_csv function handles the actual file I/O.
-    result = storage_engine.import_csv(project, database, table_name, Path(csv_path))
+    # DuckDB's read functions handle the actual file I/O.
+    result = storage_engine.import_data(project, database, table_name, Path(csv_path), fmt=format)
     if not result.get("success"):
-        log_error(f"CSV import failed [{project}/{database}]: {result.get('error', 'unknown')}")
+        log_error(f"Import failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return result
 
 
@@ -327,12 +328,13 @@ async def export_csv(
     database: str,
     table_name: str,
     csv_path: str,
+    format: str = "csv",
     password: str = Depends(verify_project_key),
 ) -> dict:
-    """Export a table to CSV.
+    """Export a table to a file.
 
-    Uses DuckDB's COPY TO statement internally. The csv_path is a
-    server-local destination path. The file is created or overwritten.
+    Supported formats: csv (default), parquet, json.
+    The csv_path is a server-local destination path.
     """
     if not storage_engine:
         log_error("export_csv: Storage engine not initialized")
@@ -350,7 +352,7 @@ async def export_csv(
             detail="Write access denied",
         )
 
-    result = storage_engine.export_csv(project, database, table_name, Path(csv_path))
+    result = storage_engine.export_data(project, database, table_name, Path(csv_path), fmt=format)
     if not result.get("success"):
-        log_error(f"CSV export failed [{project}/{database}]: {result.get('error', 'unknown')}")
+        log_error(f"Export failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return result

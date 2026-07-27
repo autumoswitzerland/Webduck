@@ -259,6 +259,9 @@ msgstr "SQL-Datei ausführen"
 msgid "drop_sql_file"
 msgstr "SQL-Datei hier ablegen oder klicken zum Auswählen"
 
+msgid "only_sql_allowed"
+msgstr "Nur .sql-Dateien sind erlaubt"
+
 msgid "file_too_large"
 msgstr "Datei zu gross (max {0} MB)"
 
@@ -319,13 +322,13 @@ msgid "import_export"
 msgstr "Import/Export"
 
 msgid "csv_import"
-msgstr "CSV Import"
+msgstr "Import"
 
 msgid "csv_export"
-msgstr "CSV Export"
+msgstr "Export"
 
 msgid "drop_csv_file"
-msgstr "CSV-Datei hier ablegen oder klicken zum Auswählen"
+msgstr "Datei hier ablegen oder klicken zum Auswählen (CSV, Parquet, JSON)"
 
 msgid "table_name"
 msgstr "Tabellenname"
@@ -343,16 +346,25 @@ msgid "exporting"
 msgstr "Exportiere..."
 
 msgid "import_success"
-msgstr "CSV erfolgreich importiert"
+msgstr "{0} erfolgreich importiert"
 
 msgid "export_success"
-msgstr "CSV erfolgreich exportiert"
+msgstr "{0} erfolgreich exportiert"
 
 msgid "execute_import"
-msgstr "CSV importieren"
+msgstr "Importieren"
 
 msgid "execute_export"
-msgstr "CSV exportieren"
+msgstr "Exportieren"
+
+msgid "import"
+msgstr "Import"
+
+msgid "export"
+msgstr "Export"
+
+msgid "format"
+msgstr "Format"
 
 msgid "import_hint"
-msgstr "Unterstützte Formate: CSV, TXT. Trennzeichen wird automatisch erkannt. Maximale Dateigrösse: {0} MB."
+msgstr "Unterstützte Formate: CSV, Parquet, JSON (automatische Erkennung anhand der Dateiendung). Maximale Dateigrösse: {0} MB."

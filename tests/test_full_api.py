@@ -11,12 +11,12 @@ Usage:
 """
 
 import csv
+import json
 import sys
-from pathlib import Path
 
-import pytest
+import duckdb
 import httpx
-
+import pytest
 
 # ---------------------------------------------------------------------------
 # HTTP client for live server
@@ -95,6 +95,32 @@ def csv_file(tmp_path):
             ["2", "Bob", "87.3"],
             ["3", "Charlie", "91.0"],
         ])
+    return p
+
+
+@pytest.fixture
+def parquet_file(tmp_path):
+    """Write a small Parquet file for import tests."""
+    p = tmp_path / "test_data.parquet"
+    con = duckdb.connect()
+    con.execute("CREATE TABLE t (id INTEGER, name VARCHAR, score DOUBLE)")
+    con.execute("INSERT INTO t VALUES (1, 'Alice', 95.5), (2, 'Bob', 87.3), (3, 'Charlie', 91.0)")
+    con.execute(f"COPY t TO '{p}' (FORMAT PARQUET)")
+    con.close()
+    return p
+
+
+@pytest.fixture
+def json_file(tmp_path):
+    """Write a small JSON file for import tests."""
+    p = tmp_path / "test_data.json"
+    rows = [
+        {"id": 1, "name": "Alice", "score": 95.5},
+        {"id": 2, "name": "Bob", "score": 87.3},
+        {"id": 3, "name": "Charlie", "score": 91.0},
+    ]
+    with open(p, "w") as f:
+        json.dump(rows, f)
     return p
 
 
@@ -308,7 +334,7 @@ class TestPassword:
 
     def test_query_no_key_rejected(self, client, request):
         ia = request.config.getoption("--interactive")
-        step("Query 'main' without X-Project-Key (expect 401)", ia)
+        step("Query 'db_main' without X-Project-Key (expect 401)", ia)
 
         resp = client.post(
             "/db/projects/alpha/databases/db_main/query",
@@ -319,7 +345,7 @@ class TestPassword:
 
     def test_query_wrong_key_rejected(self, client, request):
         ia = request.config.getoption("--interactive")
-        step("Query 'main' with wrong password (expect 401)", ia)
+        step("Query 'db_main' with wrong password (expect 401)", ia)
 
         resp = client.post(
             "/db/projects/alpha/databases/db_main/query",
@@ -331,7 +357,7 @@ class TestPassword:
 
     def test_query_correct_key(self, client, request):
         ia = request.config.getoption("--interactive")
-        step("Query 'main' with correct password", ia)
+        step("Query 'db_main' with correct password", ia)
 
         resp = client.post(
             "/db/projects/alpha/databases/db_main/query",
@@ -532,8 +558,136 @@ class TestCSV:
 
 
 # ===========================================================================
-#  7. PUBLIC ENDPOINTS
+#  6b. PARQUET IMPORT / EXPORT
 # ===========================================================================
+
+class TestParquet:
+    def test_import_parquet(self, client, parquet_file, request):
+        ia = request.config.getoption("--interactive")
+        step(f"Import Parquet into 'imported_parquet' (file: {parquet_file})", ia)
+
+        resp = client.post(
+            "/db/projects/alpha/databases/db_main/import",
+            params={"table_name": "imported_parquet", "csv_path": str(parquet_file)},
+            headers=_k("alpha", "dbpass123"),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        print("  Imported")
+
+    def test_verify_parquet_import(self, client, request):
+        ia = request.config.getoption("--interactive")
+        step("VERIFY: Check 'imported_parquet' table has 3 rows?", ia)
+
+        resp = client.post(
+            "/db/projects/alpha/databases/db_main/query",
+            json={"sql": "SELECT * FROM imported_parquet ORDER BY id"},
+            headers=_k("alpha", "dbpass123"),
+        )
+        data = resp.json()
+        assert data["success"] is True
+        assert len(data["rows"]) == 3
+        for r in data["rows"]:
+            print(f"  {r}")
+
+    def test_export_parquet(self, client, tmp_path, request):
+        ia = request.config.getoption("--interactive")
+        step("Export 'imported_parquet' to Parquet file", ia)
+
+        export_path = tmp_path / "exported.parquet"
+        resp = client.get(
+            "/db/projects/alpha/databases/db_main/export",
+            params={
+                "table_name": "imported_parquet",
+                "csv_path": str(export_path),
+                "format": "parquet",
+            },
+            headers=_k("alpha", "dbpass123"),
+        )
+        assert resp.json()["success"] is True
+        assert export_path.exists()
+
+        result = duckdb.sql(f"SELECT * FROM read_parquet('{export_path}') ORDER BY id").fetchall()
+        print(f"  Exported {len(result)} rows")
+        for r in result:
+            print(f"  {r}")
+
+    def test_import_nonexistent_parquet(self, client, request):
+        ia = request.config.getoption("--interactive")
+        step("Import missing .parquet file (expect error)", ia)
+
+        resp = client.post(
+            "/db/projects/alpha/databases/db_main/import",
+            params={"table_name": "x", "csv_path": "/no/such/file.parquet"},
+            headers=_k("alpha", "dbpass123"),
+        )
+        assert resp.json()["success"] is False
+        print(f"  Error: {resp.json().get('error')}")
+
+
+# ===========================================================================
+#  6c. JSON IMPORT / EXPORT
+# ===========================================================================
+
+class TestJSON:
+    def test_import_json(self, client, json_file, request):
+        ia = request.config.getoption("--interactive")
+        step(f"Import JSON into 'imported_json' (file: {json_file})", ia)
+
+        resp = client.post(
+            "/db/projects/alpha/databases/db_main/import",
+            params={"table_name": "imported_json", "csv_path": str(json_file)},
+            headers=_k("alpha", "dbpass123"),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        print("  Imported")
+
+    def test_verify_json_import(self, client, request):
+        ia = request.config.getoption("--interactive")
+        step("VERIFY: Check 'imported_json' table has 3 rows?", ia)
+
+        resp = client.post(
+            "/db/projects/alpha/databases/db_main/query",
+            json={"sql": "SELECT * FROM imported_json ORDER BY id"},
+            headers=_k("alpha", "dbpass123"),
+        )
+        data = resp.json()
+        assert data["success"] is True
+        assert len(data["rows"]) == 3
+        for r in data["rows"]:
+            print(f"  {r}")
+
+    def test_export_json(self, client, tmp_path, request):
+        ia = request.config.getoption("--interactive")
+        step("Export 'imported_json' to JSON file", ia)
+
+        export_path = tmp_path / "exported.json"
+        resp = client.get(
+            "/db/projects/alpha/databases/db_main/export",
+            params={"table_name": "imported_json", "csv_path": str(export_path), "format": "json"},
+            headers=_k("alpha", "dbpass123"),
+        )
+        assert resp.json()["success"] is True
+        assert export_path.exists()
+
+        with open(export_path) as f:
+            data = json.load(f)
+        print(f"  Exported {len(data)} records")
+        for r in data:
+            print(f"  {r}")
+
+    def test_import_nonexistent_json(self, client, request):
+        ia = request.config.getoption("--interactive")
+        step("Import missing .json file (expect error)", ia)
+
+        resp = client.post(
+            "/db/projects/alpha/databases/db_main/import",
+            params={"table_name": "x", "csv_path": "/no/such/file.json"},
+            headers=_k("alpha", "dbpass123"),
+        )
+        assert resp.json()["success"] is False
+        print(f"  Error: {resp.json().get('error')}")
 
 class TestPublic:
     def test_list_projects_public(self, client, request):
