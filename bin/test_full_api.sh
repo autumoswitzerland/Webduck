@@ -101,6 +101,11 @@ if ! python -c "import pytest_asyncio" >/dev/null 2>&1; then
     python -m pip install pytest-asyncio
 fi
 
+if ! python -c "import httpx2" >/dev/null 2>&1; then
+    echo "httpx2 is not installed. Installing..."
+    python -m pip install httpx2
+fi
+
 echo ""
 echo "Test dependencies are available."
 echo ""

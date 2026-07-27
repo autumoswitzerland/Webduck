@@ -177,11 +177,11 @@ msgstr "Columns"
 msgid "rows"
 msgstr "Rows"
 
-msgid "import_csv"
-msgstr "Import CSV"
+msgid "import_file"
+msgstr "Import File"
 
-msgid "export_csv"
-msgstr "Export CSV"
+msgid "export_file"
+msgstr "Export File"
 
 # Errors
 msgid "error"

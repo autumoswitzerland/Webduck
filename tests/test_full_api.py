@@ -6,13 +6,15 @@ Usage:
   1. Start server:  webduck start
   2. Run tests:     pytest tests/test_full_api.py -s --interactive
 
-  Or without GUI (in-memory, for CI):
-     pytest tests/test_full_api.py
+  By default, tests connect to:
+     http://127.0.0.1:8998
+
+  Or specify another server:
+     pytest tests/test_full_api.py -s --server-url http://127.0.0.1:8998
 """
 
 import csv
 import json
-import sys
 
 import duckdb
 import httpx
@@ -72,15 +74,40 @@ def _k(project, password):
 
 @pytest.fixture
 def client(request):
-    """Return a ServerClient pointing at the running server.
+    """Return a ServerClient pointing at a running WebDuck server.
 
-    Requires --server-url http://localhost:8998
+    If --server-url is omitted, the default server URL is checked.
     """
+
     url = request.config.getoption("--server-url")
+
     if not url:
-        print("\n  *** --server-url is required for E2E tests ***")
-        print("  Example: pytest tests/test_full_api.py -s --interactive --server-url http://localhost:8998")
-        sys.exit(1)
+        url = "http://127.0.0.1:8998"
+
+    try:
+        response = httpx.get(
+            f"{url.rstrip('/')}/health",
+            timeout=2.0,
+        )
+
+        if response.status_code != 200:
+            pytest.skip(
+                f"WebDuck server is not available at {url} "
+                f"(HTTP {response.status_code})"
+            )
+
+    except httpx.RequestError:
+        pytest.skip(
+            f"\n"
+            f"WebDuck server is not running at {url}.\n"
+            f"Start it with:\n"
+            f"  webduck start\n"
+            f"\n"
+            f"Or specify another server:\n"
+            f"  pytest tests/test_full_api.py -s "
+            f"--server-url http://127.0.0.1:8998"
+        )
+
     return ServerClient(url)
 
 
@@ -502,8 +529,8 @@ class TestCSV:
         step(f"Import CSV into 'imported_data' (file: {csv_file})", ia)
 
         resp = client.post(
-            "/db/projects/alpha/databases/db_main/import",
-            params={"table_name": "imported_data", "csv_path": str(csv_file)},
+            "/db/projects/alpha/databases/db_main/import/imported_data",
+            params={"path": str(csv_file)},
             headers=_k("alpha", "dbpass123"),
         )
         assert resp.status_code == 200
@@ -531,8 +558,8 @@ class TestCSV:
 
         export_path = tmp_path / "exported.csv"
         resp = client.get(
-            "/db/projects/alpha/databases/db_main/export",
-            params={"table_name": "imported_data", "csv_path": str(export_path)},
+            "/db/projects/alpha/databases/db_main/export/imported_data",
+            params={"path": str(export_path)},
             headers=_k("alpha", "dbpass123"),
         )
         assert resp.json()["success"] is True
@@ -549,8 +576,8 @@ class TestCSV:
         step("Import from missing file (expect error)", ia)
 
         resp = client.post(
-            "/db/projects/alpha/databases/db_main/import",
-            params={"table_name": "x", "csv_path": "/no/such/file.csv"},
+            "/db/projects/alpha/databases/db_main/import/x",
+            params={"path": "/no/such/file.csv"},
             headers=_k("alpha", "dbpass123"),
         )
         assert resp.json()["success"] is False
@@ -567,8 +594,8 @@ class TestParquet:
         step(f"Import Parquet into 'imported_parquet' (file: {parquet_file})", ia)
 
         resp = client.post(
-            "/db/projects/alpha/databases/db_main/import",
-            params={"table_name": "imported_parquet", "csv_path": str(parquet_file)},
+            "/db/projects/alpha/databases/db_main/import/imported_parquet",
+            params={"path": str(parquet_file)},
             headers=_k("alpha", "dbpass123"),
         )
         assert resp.status_code == 200
@@ -596,10 +623,9 @@ class TestParquet:
 
         export_path = tmp_path / "exported.parquet"
         resp = client.get(
-            "/db/projects/alpha/databases/db_main/export",
+            "/db/projects/alpha/databases/db_main/export/imported_parquet",
             params={
-                "table_name": "imported_parquet",
-                "csv_path": str(export_path),
+                "path": str(export_path),
                 "format": "parquet",
             },
             headers=_k("alpha", "dbpass123"),
@@ -617,8 +643,8 @@ class TestParquet:
         step("Import missing .parquet file (expect error)", ia)
 
         resp = client.post(
-            "/db/projects/alpha/databases/db_main/import",
-            params={"table_name": "x", "csv_path": "/no/such/file.parquet"},
+            "/db/projects/alpha/databases/db_main/import/x",
+            params={"path": "/no/such/file.parquet"},
             headers=_k("alpha", "dbpass123"),
         )
         assert resp.json()["success"] is False
@@ -635,8 +661,8 @@ class TestJSON:
         step(f"Import JSON into 'imported_json' (file: {json_file})", ia)
 
         resp = client.post(
-            "/db/projects/alpha/databases/db_main/import",
-            params={"table_name": "imported_json", "csv_path": str(json_file)},
+            "/db/projects/alpha/databases/db_main/import/imported_json",
+            params={"path": str(json_file)},
             headers=_k("alpha", "dbpass123"),
         )
         assert resp.status_code == 200
@@ -664,8 +690,8 @@ class TestJSON:
 
         export_path = tmp_path / "exported.json"
         resp = client.get(
-            "/db/projects/alpha/databases/db_main/export",
-            params={"table_name": "imported_json", "csv_path": str(export_path), "format": "json"},
+            "/db/projects/alpha/databases/db_main/export/imported_json",
+            params={"path": str(export_path), "format": "json"},
             headers=_k("alpha", "dbpass123"),
         )
         assert resp.json()["success"] is True
@@ -682,8 +708,8 @@ class TestJSON:
         step("Import missing .json file (expect error)", ia)
 
         resp = client.post(
-            "/db/projects/alpha/databases/db_main/import",
-            params={"table_name": "x", "csv_path": "/no/such/file.json"},
+            "/db/projects/alpha/databases/db_main/import/x",
+            params={"path": "/no/such/file.json"},
             headers=_k("alpha", "dbpass123"),
         )
         assert resp.json()["success"] is False
