@@ -35,7 +35,7 @@
 
 This module is the central orchestrator.  It wires together FastAPI (REST),
 NiceGUI (Web UI), DuckDB storage, and authentication into a single process
-served on one port.  The ``main()`` function exposes three Click commands:
+served on one port.  The ``main()`` function exposes three CLI commands:
 
 * ``webduck init``  — create the first admin user and write a config file.
 * ``webduck start`` — boot the full server (FastAPI + NiceGUI + uvicorn).

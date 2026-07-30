@@ -154,7 +154,7 @@ def register():
                 on_upload=on_upload,
                 auto_upload=True,
                 max_file_size=ctx.max_upload_mb * 1024 * 1024,
-                label=_("drop_csv_file"),
+                label=_("drop_file"),
                 multiple=False,
             ).props('removable max-files="1" accept=".csv,.tsv,.txt,.parquet,.json,.jsonl,.ndjson"').classes("w-full")
 

@@ -15,7 +15,7 @@
 #  DuckDB storage engine with file-locking for concurrent access.
 #
 #  Provides CRUD operations for projects and databases, SQL query/write
-#  execution, table listing, and CSV import/export. Uses per-file
+#  execution, table listing, and CSV/Parquet/JSON import/export. Uses per-file
 #  threading locks for DuckDB's single-writer concurrency model.
 #
 #  Project:   WebDuck

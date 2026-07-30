@@ -330,7 +330,7 @@ msgstr "Import"
 msgid "csv_export"
 msgstr "Export"
 
-msgid "drop_csv_file"
+msgid "drop_file"
 msgstr "Datei hier ablegen oder klicken zum Auswählen (CSV, Parquet, JSON)"
 
 msgid "table_name"
