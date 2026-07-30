@@ -60,7 +60,7 @@ pip install webduck
 curl -O https://raw.githubusercontent.com/autumoswitzerland/Webduck/main/docker-compose.yml
 
 # Set password
-export WEBDUCK_ADMIN_PASS=meinpasswort
+export WEBDUCK_ADMIN_PASS=mypassword
 
 # Start - An admin user is created automatically
 docker compose up -d
