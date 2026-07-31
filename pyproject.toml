@@ -12,16 +12,38 @@ requires-python = ">=3.11"
 authors = [
     { name = "autumo GmbH", email = "info@autumo.ch" }
 ]
-keywords = ["duckdb", "database", "server", "api"]
+keywords = [
+    "duckdb",
+    "database",
+    "server",
+    "api",
+    "analytics",
+    "csv",
+    "docker",
+    "fastapi",
+    "json",
+    "parquet",
+    "rest-api",
+    "self-hosted",
+    "sql",
+    "web-ui",
+]
 classifiers = [
+    "License :: OSI Approved :: MIT License",
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Topic :: Database",
+    "Topic :: Database :: Database Engines/Servers",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development",
+    "Topic :: Utilities",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Topic :: Database",
-    "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
     "fastapi>=0.115.0",
@@ -43,6 +65,11 @@ dev = [
     "httpx2>=0.1.0",
     "ruff>=0.5.0",
 ]
+
+[project.urls]
+Homepage = "https://webduck.autumo.ch/"
+Source = "https://github.com/autumoswitzerland/Webduck"
+Tracker = "https://github.com/autumoswitzerland/Webduck/issues"
 
 [project.scripts]
 webduck = "webduck.cli:main"
