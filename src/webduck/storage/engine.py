@@ -16,7 +16,8 @@
 #
 #  Provides CRUD operations for projects and databases, SQL query/write
 #  execution, table listing, and CSV/Parquet/JSON import/export. Uses per-file
-#  threading locks for DuckDB's single-writer concurrency model.
+#  reader-writer locks: parallel reads (read-only connections) and exclusive
+#  writes, mirroring DuckDB's concurrency model.
 #
 #  Project:   WebDuck
 #  Author:    autumo GmbH
@@ -28,6 +29,8 @@
 import json
 import threading
 import weakref
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -40,8 +43,56 @@ import duckdb
 RESERVED_DUCKDB_NAMES = {"main", "temp", "system"}
 
 
+class _RWLock:
+    """Readers-writer lock with writer preference.
+
+    Multiple readers may hold the lock simultaneously (shared); a writer
+    is exclusive. Once a writer is waiting, new readers queue behind it so
+    a steady stream of reads cannot starve writes.
+
+    This mirrors DuckDB's concurrency model: several read-only connections
+    to the same database file run in parallel, while writes are serialized
+    (DuckDB allows a single writer per database). It also guarantees that a
+    read-only and a read-write connection to the same file are never open
+    at the same time — a combination DuckDB rejects in one process.
+    """
+
+    def __init__(self) -> None:
+        self._cond = threading.Condition()
+        self._readers = 0
+        self._writer = False
+        self._waiting_writers = 0
+
+    def acquire_read(self) -> None:
+        with self._cond:
+            while self._writer or self._waiting_writers:
+                self._cond.wait()
+            self._readers += 1
+
+    def release_read(self) -> None:
+        with self._cond:
+            self._readers -= 1
+            if self._readers == 0:
+                self._cond.notify_all()
+
+    def acquire_write(self) -> None:
+        with self._cond:
+            self._waiting_writers += 1
+            try:
+                while self._writer or self._readers:
+                    self._cond.wait()
+                self._writer = True
+            finally:
+                self._waiting_writers -= 1
+
+    def release_write(self) -> None:
+        with self._cond:
+            self._writer = False
+            self._cond.notify_all()
+
+
 class _DBLock:
-    """Wrapper class so a threading.Lock can live in a WeakValueDictionary.
+    """Wrapper class so an RW-lock can live in a WeakValueDictionary.
 
     The ``_locks`` dict in StorageEngine holds these wrappers via weak
     references. As long as any thread holds a strong reference (waiting on
@@ -54,23 +105,34 @@ class _DBLock:
     is weak-referenceable.
     """
 
-    __slots__ = ("lock", "__weakref__")
+    __slots__ = ("rwlock", "__weakref__")
 
     def __init__(self) -> None:
-        self.lock = threading.Lock()
+        self.rwlock = _RWLock()
 
-    def acquire(self) -> bool:
-        return self.lock.acquire()
+    @contextmanager
+    def read(self) -> Generator[None, None, None]:
+        """Acquire the lock in shared (read) mode."""
+        self.rwlock.acquire_read()
+        try:
+            yield
+        finally:
+            self.rwlock.release_read()
 
-    def release(self) -> None:
-        self.lock.release()
+    @contextmanager
+    def write(self) -> Generator[None, None, None]:
+        """Acquire the lock in exclusive (write) mode."""
+        self.rwlock.acquire_write()
+        try:
+            yield
+        finally:
+            self.rwlock.release_write()
 
-    def __enter__(self) -> "_DBLock":
-        self.lock.acquire()
-        return self
+    def acquire_write(self) -> None:
+        self.rwlock.acquire_write()
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self.lock.release()
+    def release_write(self) -> None:
+        self.rwlock.release_write()
 
 
 class StorageEngine:
@@ -78,13 +140,16 @@ class StorageEngine:
 
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
-        # Per-file locks prevent concurrent writes to the same .duckdb file.
-        # DuckDB only allows one writer per database at a time (and mixing a
-        # read-only connection with a read-write connection to the same file
-        # in one process is not allowed either), so we use a separate lock
-        # per resolved file path. `_locks` is a WeakValueDictionary holding
-        # `_DBLock` wrappers — entries vanish via GC once no thread uses the
-        # lock anymore, keeping the dict from growing unboundedly.
+        # Per-file reader-writer locks guard concurrent access to the same
+        # .duckdb file. DuckDB allows several read-only connections to run in
+        # parallel, but only one writer per database — and mixing a read-only
+        # connection with a read-write connection to the same file in one
+        # process is not allowed either. The shared (read) mode lets reads
+        # run in parallel; the exclusive (write) mode serializes writes and
+        # guarantees read-only and read-write connections never overlap.
+        # `_locks` is a WeakValueDictionary holding `_DBLock` wrappers —
+        # entries vanish via GC once no thread uses the lock anymore, keeping
+        # the dict from growing unboundedly.
         # `_locks_lock` guards creation of new entries (not the locks
         # themselves).
         self._locks: weakref.WeakValueDictionary[str, _DBLock] = (
@@ -227,7 +292,7 @@ class StorageEngine:
         # Lock is acquired to avoid a race where two concurrent calls try to
         # create the same database file simultaneously.
         lock = self._get_lock(str(db_path))
-        with lock:
+        with lock.write():
             con = duckdb.connect(str(db_path))
             con.close()
         return True
@@ -239,7 +304,7 @@ class StorageEngine:
             return False
 
         lock = self._get_lock(str(db_path))
-        with lock:
+        with lock.write():
             db_path.unlink()
         return True
 
@@ -260,13 +325,13 @@ class StorageEngine:
         )
         locks = [self._get_lock(str(p)) for p in db_files]
         for lock in locks:
-            lock.acquire()
+            lock.acquire_write()
         try:
             import shutil
             shutil.rmtree(project_dir)
         finally:
             for lock in reversed(locks):
-                lock.release()
+                lock.release_write()
 
         order = self._load_project_order()
         if project in order:
@@ -286,9 +351,11 @@ class StorageEngine:
         """Execute a SQL query and return results.
 
         The per-file lock is held for the entire duration of the query.
-        This is necessary because DuckDB's single-writer model means a
-        write transaction blocks all other writers; holding the lock
-        prevents other threads from hanging on a stale connection.
+        ``read_only`` selects the lock mode: True acquires a shared lock and
+        opens a read-only connection (parallel readers), False acquires the
+        exclusive lock and opens a read-write connection. Holding the lock
+        guarantees that a read-only and a read-write connection to the same
+        file never overlap — a combination DuckDB rejects in one process.
         """
         db_path = self._get_db_path(project, database)
         if not db_path.exists():
@@ -298,7 +365,7 @@ class StorageEngine:
             }
 
         lock = self._get_lock(str(db_path))
-        with lock:
+        with (lock.read() if read_only else lock.write()):
             try:
                 con = duckdb.connect(str(db_path), read_only=read_only)
                 try:
