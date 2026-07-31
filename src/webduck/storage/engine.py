@@ -27,6 +27,7 @@
 
 import json
 import threading
+import weakref
 from pathlib import Path
 from typing import Any
 
@@ -39,24 +40,66 @@ import duckdb
 RESERVED_DUCKDB_NAMES = {"main", "temp", "system"}
 
 
+class _DBLock:
+    """Wrapper class so a threading.Lock can live in a WeakValueDictionary.
+
+    The ``_locks`` dict in StorageEngine holds these wrappers via weak
+    references. As long as any thread holds a strong reference (waiting on
+    or holding the lock), the entry stays alive; once no thread uses the
+    lock anymore, the entry is collected by GC automatically. This avoids
+    unbounded dict growth without an explicit ``pop()``, which would race
+    against a new lock object being created for the same path.
+
+    ``__weakref__`` must be declared in ``__slots__`` so the wrapper itself
+    is weak-referenceable.
+    """
+
+    __slots__ = ("lock", "__weakref__")
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+
+    def acquire(self) -> bool:
+        return self.lock.acquire()
+
+    def release(self) -> None:
+        self.lock.release()
+
+    def __enter__(self) -> "_DBLock":
+        self.lock.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.lock.release()
+
+
 class StorageEngine:
     """DuckDB storage engine with file-locking for concurrent access."""
 
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
-        # Per-file threading locks prevent concurrent writes to the same
-        # .duckdb file. DuckDB only allows one writer per database at a time,
-        # so we use a separate Lock per resolved file path. `_locks_lock`
-        # guards creation of new entries (not the locks themselves).
-        self._locks: dict[str, threading.Lock] = {}
+        # Per-file locks prevent concurrent writes to the same .duckdb file.
+        # DuckDB only allows one writer per database at a time (and mixing a
+        # read-only connection with a read-write connection to the same file
+        # in one process is not allowed either), so we use a separate lock
+        # per resolved file path. `_locks` is a WeakValueDictionary holding
+        # `_DBLock` wrappers — entries vanish via GC once no thread uses the
+        # lock anymore, keeping the dict from growing unboundedly.
+        # `_locks_lock` guards creation of new entries (not the locks
+        # themselves).
+        self._locks: weakref.WeakValueDictionary[str, _DBLock] = (
+            weakref.WeakValueDictionary()
+        )
         self._locks_lock = threading.Lock()
 
-    def _get_lock(self, db_path: str) -> threading.Lock:
-        """Get or create a lock for a specific database file."""
+    def _get_lock(self, db_path: str) -> _DBLock:
+        """Get or create the lock wrapper for a specific database file."""
         with self._locks_lock:
-            if db_path not in self._locks:
-                self._locks[db_path] = threading.Lock()
-            return self._locks[db_path]
+            wrapper = self._locks.get(db_path)
+            if wrapper is None:
+                wrapper = _DBLock()
+                self._locks[db_path] = wrapper
+            return wrapper
 
     # ------------------------------------------------------------------
     #  Project order (JSON)
@@ -206,8 +249,24 @@ class StorageEngine:
         if not project_dir.exists():
             return False
 
-        import shutil
-        shutil.rmtree(project_dir)
+        # Acquire the locks of all contained databases first, so a running
+        # query on one of them cannot collide with the recursive delete
+        # (which would surface as a file-not-found error mid-query or a
+        # lost write). Locks are taken in sorted path order and released
+        # in reverse — harmless here since no other path acquires multiple
+        # locks at once, so no deadlock can occur.
+        db_files = sorted(
+            p for p in project_dir.glob("*.duckdb") if p.is_file()
+        )
+        locks = [self._get_lock(str(p)) for p in db_files]
+        for lock in locks:
+            lock.acquire()
+        try:
+            import shutil
+            shutil.rmtree(project_dir)
+        finally:
+            for lock in reversed(locks):
+                lock.release()
 
         order = self._load_project_order()
         if project in order:
