@@ -15,6 +15,8 @@ Usage:
 
 import csv
 import json
+import threading
+import time
 
 import duckdb
 import httpx
@@ -29,6 +31,7 @@ class ServerClient:
 
     def __init__(self, base_url: str):
         self._base = base_url.rstrip("/")
+        self.base_url = self._base
         self._http = httpx.Client(base_url=self._base, timeout=30)
 
     def get(self, path, **kw):
@@ -796,3 +799,67 @@ class TestHealth:
         resp = client.get("/health")
         assert resp.status_code == 200
         print(f"  {resp.json()}")
+
+
+# ===========================================================================
+#  10. CONCURRENCY — parallel reads over HTTP must overlap
+# ===========================================================================
+#  Proves the RW-lock + asyncio.to_thread path end-to-end: concurrent
+#  /query requests to the same database run in parallel (wall time ≈ one
+#  query instead of N). Self-contained: creates its own project/db so it
+#  works regardless of test ordering, and cleans up afterwards.
+
+class TestConcurrency:
+    def test_parallel_reads_over_http(self, client, request):
+        ia = request.config.getoption("--interactive")
+        step("Parallel /query reads must overlap (RW-lock + to_thread)", ia)
+
+        # Self-contained setup (idempotent: delete leftover project first)
+        if _get_token() is None:
+            r = client.post(
+                "/admin/login", json={"username": "admin", "password": "admin"}
+            )
+            assert r.status_code == 200
+            _store_token(r.json()["token"])
+        client.delete("/admin/projects/conc", headers=_auth())
+        resp = client.post("/admin/projects", json={"name": "conc"}, headers=_auth())
+        assert resp.status_code == 200
+        resp = client.post(
+            "/admin/projects/conc/databases",
+            json={"name": "conc_db"},
+            headers=_auth(),
+        )
+        assert resp.status_code == 200
+
+        url = client.base_url + "/db/projects/conc/databases/conc_db/query"
+        payload = {"sql": "SELECT count(*) FROM range(200000000)"}
+
+        def one():
+            with httpx.Client(timeout=60) as http:
+                r = http.post(url, json=payload)
+            assert r.status_code == 200, r.text
+            assert r.json()["success"]
+
+        one()  # warm up (also verifies the DB is reachable)
+
+        t0 = time.perf_counter()
+        for _ in range(3):
+            one()
+        t_seq = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        threads = [threading.Thread(target=one) for _ in range(3)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        t_par = time.perf_counter() - t0
+
+        print(f"  3 sequential: {t_seq:.3f}s   3 parallel: {t_par:.3f}s")
+        assert t_par < 0.75 * t_seq, (
+            f"parallel reads did NOT overlap: "
+            f"t_par={t_par:.3f}s vs 0.75*t_seq={0.75 * t_seq:.3f}s"
+        )
+        print("  Parallel reads overlap — RW-lock works over HTTP")
+
+        client.delete("/admin/projects/conc", headers=_auth())

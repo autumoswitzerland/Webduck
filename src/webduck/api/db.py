@@ -32,6 +32,7 @@
 
 """WebDuck REST API - Database endpoints (project/db/password protected)."""
 
+import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -150,7 +151,7 @@ async def list_projects() -> list[str]:
     if not storage_engine:
         log_error("list_projects: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
-    return storage_engine.list_projects()
+    return await asyncio.to_thread(storage_engine.list_projects)
 
 
 @router.get("/projects/{project}/databases")
@@ -159,7 +160,7 @@ async def list_databases(project: str) -> list[str]:
     if not storage_engine:
         log_error("list_databases: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
-    return storage_engine.list_databases(project)
+    return await asyncio.to_thread(storage_engine.list_databases, project)
 
 
 @router.post("/projects/{project}/databases/{database}/query", response_model=QueryResponse)
@@ -181,7 +182,14 @@ async def execute_query(
         log_error("execute_query: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
-    result = storage_engine.execute_query(project, database, req.sql, req.params, read_only=True)
+    result = await asyncio.to_thread(
+        storage_engine.execute_query,
+        project,
+        database,
+        req.sql,
+        req.params,
+        read_only=True,
+    )
     log_query(project, database, req.sql, result["success"],
               row_count=result.get("row_count", 0), error=result.get("error", ""))
     if not result["success"]:
@@ -220,7 +228,14 @@ async def execute_write(
             detail="Write access denied",
         )
 
-    result = storage_engine.execute_query(project, database, req.sql, req.params, read_only=False)
+    result = await asyncio.to_thread(
+        storage_engine.execute_query,
+        project,
+        database,
+        req.sql,
+        req.params,
+        read_only=False,
+    )
     log_query(project, database, req.sql, result["success"],
               row_count=result.get("row_count", 0), error=result.get("error", ""))
     if not result["success"]:
@@ -243,7 +258,7 @@ async def list_tables(
         log_error("list_tables: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
-    result = storage_engine.get_table_info(project, database)
+    result = await asyncio.to_thread(storage_engine.get_table_info, project, database)
     return result
 
 
@@ -297,7 +312,7 @@ async def import_file(
     already exists, it is completely replaced.
 
     The path is a server-local file path.
-    """    
+    """
     if not storage_engine:
         log_error("import: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
@@ -316,7 +331,9 @@ async def import_file(
 
     # Path is wrapped in a Path object by the engine for safe resolution.
     # DuckDB's read functions handle the actual file I/O.
-    result = storage_engine.import_data(project, database, table_name, Path(path), fmt=format)
+    result = await asyncio.to_thread(
+        storage_engine.import_data, project, database, table_name, Path(path), fmt=format
+    )
     if not result.get("success"):
         log_error(f"Import failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return result
@@ -372,7 +389,9 @@ async def export_file(
             detail="Write access denied",
         )
 
-    result = storage_engine.export_data(project, database, table_name, Path(path), fmt=format)
+    result = await asyncio.to_thread(
+        storage_engine.export_data, project, database, table_name, Path(path), fmt=format
+    )
     if not result.get("success"):
         log_error(f"Export failed [{project}/{database}]: {result.get('error', 'unknown')}")
     return result

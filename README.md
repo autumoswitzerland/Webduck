@@ -7,7 +7,7 @@
   a ready-to-use administration interface for DuckDB databases and data analytics
   — out of the box, just like the database admin tools that come with any hosting package.
 
-  <img src="https://img.shields.io/badge/version-1.2.1-FFD54F">
+  <img src="https://img.shields.io/badge/version-1.3.0-FFD54F">
   <img src="https://img.shields.io/badge/license-MIT-green">
   <img src="https://img.shields.io/badge/python-3.11+-blue">
 
@@ -242,7 +242,7 @@ FastAPI ──┬── /admin/*   (JWT auth)    → Project/DB management
 - **Auth:** Admin passwords in `data/.users.json` (bcrypt), DB passwords in `data/<project>/.project.json`
 - **User preferences:** Stored in `data/.user_preferences.json`
 - **Logging:** Rotated log files in `log/` (configurable), independent console logging
-- **Concurrency:** Single-writer via file-level locks (apps manage write contention)
+- **Concurrency:** Per-file reader-writer locks — parallel reads, exclusive writes (DuckDB single-writer model)
 
 ## Development
 

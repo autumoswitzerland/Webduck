@@ -34,6 +34,8 @@
 
 """WebDuck REST API - Admin endpoints (JWT protected)."""
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -141,7 +143,7 @@ async def login(req: LoginRequest) -> LoginResponse:
         log_error("login: Auth manager not initialized")
         raise HTTPException(status_code=500, detail="Auth manager not initialized")
 
-    if not auth_manager.verify_user(req.username, req.password):
+    if not await asyncio.to_thread(auth_manager.verify_user, req.username, req.password):
         log_warning(f"Failed login attempt for user '{req.username}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -158,7 +160,7 @@ async def list_projects(username: str = Depends(verify_admin)) -> list[str]:
     if not storage_engine:
         log_error("list_projects: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
-    return storage_engine.list_projects()
+    return await asyncio.to_thread(storage_engine.list_projects)
 
 
 @router.post("/projects")
@@ -173,7 +175,7 @@ async def create_project(
             detail="Storage engine not initialized",
         )
 
-    if not storage_engine.create_project(req.name):
+    if not await asyncio.to_thread(storage_engine.create_project, req.name):
         log_warning(f"create_project: Project '{req.name}' already exists")
         raise HTTPException(
             status_code=400,
@@ -193,7 +195,7 @@ async def delete_project(project: str, username: str = Depends(verify_admin)) ->
         log_error("delete_project: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
-    if not storage_engine.delete_project(project):
+    if not await asyncio.to_thread(storage_engine.delete_project, project):
         raise HTTPException(status_code=404, detail="Project not found")
 
     return {"success": True, "message": f"Project '{project}' deleted"}
@@ -227,7 +229,7 @@ async def reorder_projects(
             status_code=500,
             detail="Storage engine not initialized",
         )
-    storage_engine.reorder_projects(req.projects)
+    await asyncio.to_thread(storage_engine.reorder_projects, req.projects)
     return {
         "success": True,
         "message": "Projects reordered",
@@ -249,7 +251,7 @@ async def list_databases(project: str, username: str = Depends(verify_admin)) ->
     if not storage_engine:
         log_error("list_databases: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
-    return storage_engine.list_databases(project)
+    return await asyncio.to_thread(storage_engine.list_databases, project)
 
 
 @router.post("/projects/{project}/databases")
@@ -264,11 +266,11 @@ async def create_database(
     if req.name.lower() in RESERVED_DUCKDB_NAMES:
         raise HTTPException(status_code=400, detail=f"'{req.name}' is a reserved DuckDB name")
 
-    if storage_engine.database_exists(project, req.name):
+    if await asyncio.to_thread(storage_engine.database_exists, project, req.name):
         log_warning(f"create_database: Database '{req.name}' already exists in '{project}'")
         raise HTTPException(status_code=400, detail="Database already exists")
 
-    if not storage_engine.create_database(project, req.name):
+    if not await asyncio.to_thread(storage_engine.create_database, project, req.name):
         log_error(f"create_database: Failed to create database '{req.name}' in '{project}'")
         raise HTTPException(status_code=500, detail="Failed to create database")
 
@@ -284,7 +286,7 @@ async def delete_database(
         log_error("delete_database: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
-    if not storage_engine.delete_database(project, database):
+    if not await asyncio.to_thread(storage_engine.delete_database, project, database):
         raise HTTPException(status_code=404, detail="Database not found")
 
     return {"success": True, "message": f"Database '{database}' deleted"}
@@ -311,7 +313,9 @@ async def set_database_password(
 
     project_auth = ProjectAuth(storage_engine.data_dir)
 
-    if not project_auth.set_database_password(project, database, req.password, req.access_level):
+    if not await asyncio.to_thread(
+        project_auth.set_database_password, project, database, req.password, req.access_level
+    ):
         log_error(f"set_database_password: Failed to set password for '{database}' in '{project}'")
         raise HTTPException(status_code=500, detail="Failed to set password")
 
@@ -324,7 +328,7 @@ async def list_users(username: str = Depends(verify_admin)) -> list[str]:
     if not auth_manager:
         log_error("list_users: Auth manager not initialized")
         raise HTTPException(status_code=500, detail="Auth manager not initialized")
-    return auth_manager.list_users()
+    return await asyncio.to_thread(auth_manager.list_users)
 
 
 class CreateUserRequest(BaseModel):
@@ -341,11 +345,11 @@ async def create_user(
         log_error("create_user: Auth manager not initialized")
         raise HTTPException(status_code=500, detail="Auth manager not initialized")
 
-    if auth_manager.user_exists(req.username):
+    if await asyncio.to_thread(auth_manager.user_exists, req.username):
         log_warning(f"create_user: User '{req.username}' already exists")
         raise HTTPException(status_code=400, detail="User already exists")
 
-    if not auth_manager.create_user(req.username, req.password):
+    if not await asyncio.to_thread(auth_manager.create_user, req.username, req.password):
         log_error(f"create_user: Failed to create user '{req.username}'")
         raise HTTPException(status_code=500, detail="Failed to create user")
 
@@ -367,7 +371,7 @@ async def delete_user(
         log_warning(f"delete_user: User '{username}' attempted to delete themselves")
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
 
-    if not auth_manager.delete_user(target_username):
+    if not await asyncio.to_thread(auth_manager.delete_user, target_username):
         raise HTTPException(status_code=404, detail="User not found")
 
     return {"success": True, "message": f"User '{target_username}' deleted"}
