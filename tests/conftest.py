@@ -1,22 +1,23 @@
 """Shared test fixtures."""
 
-import sys
-import json
+import os
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 #  Colored terminal output — replaces default F/. with speaking messages
 # ---------------------------------------------------------------------------
 
+# Colors on by default; disabled via NO_COLOR=1 (standard convention)
+_USE_COLOR = os.environ.get("NO_COLOR") is None
+
 # ANSI color codes
-_GREEN = "\033[92m"
-_RED = "\033[91m"
-_YELLOW = "\033[93m"
-_CYAN = "\033[96m"
-_BOLD = "\033[1m"
-_RESET = "\033[0m"
+_GREEN = "\033[92m" if _USE_COLOR else ""
+_RED = "\033[91m" if _USE_COLOR else ""
+_YELLOW = "\033[93m" if _USE_COLOR else ""
+_CYAN = "\033[96m" if _USE_COLOR else ""
+_BOLD = "\033[1m" if _USE_COLOR else ""
+_RESET = "\033[0m" if _USE_COLOR else ""
 
 
 def pytest_addoption(parser):
@@ -136,6 +137,7 @@ def fastapi_client(request, tmp_data, shared_auth, shared_storage):
 
     # In-memory mode (default)
     from fastapi.testclient import TestClient
+
     from webduck.api import admin as admin_api
     from webduck.api import db as db_api
     from webduck.config import AuthConfig, ServerConfig, WebDuckConfig
