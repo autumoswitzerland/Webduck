@@ -1,0 +1,49 @@
+name: Create GitHub Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract changelog section
+        env:
+          VERSION: "${{ github.ref_name }}"
+        run: |
+          VERSION="${VERSION#v}"
+          python - <<'EOF'
+          import os
+          import re
+
+          version = os.environ["VERSION"]
+          try:
+              text = open("CHANGELOG.md").read()
+          except FileNotFoundError:
+              text = ""
+
+          m = re.search(
+              rf"^## \[{re.escape(version)}\].*?(?=^## \[|\Z)",
+              text, re.M | re.S,
+          )
+          notes = m.group(0) if m else ""
+          if not notes:
+              print(f"::warning::No changelog section found for version {version}")
+          open("/tmp/notes.md", "w").write(notes)
+          EOF
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -s /tmp/notes.md ]; then
+            gh release create "${GITHUB_REF_NAME}" --notes-file /tmp/notes.md
+          else
+            gh release create "${GITHUB_REF_NAME}" --generate-notes
+          fi
