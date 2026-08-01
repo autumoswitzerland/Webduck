@@ -43,7 +43,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -s /tmp/notes.md ]; then
-            gh release create "${GITHUB_REF_NAME}" --notes-file /tmp/notes.md
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "Release ${GITHUB_REF_NAME}" \
+              --notes-file /tmp/notes.md
           else
-            gh release create "${GITHUB_REF_NAME}" --generate-notes
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "Release ${GITHUB_REF_NAME}" \
+              --generate-notes
           fi
