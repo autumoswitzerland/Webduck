@@ -102,8 +102,12 @@ def register():
                             )
 
                 ui.button(
-                    _("create_project"), on_click=create_project
-                ).props("outline").classes("border-button")
+                    on_click=create_project,
+                ).props(
+                    'icon="create_new_folder" flat dense'
+                ).classes("wd-icon-blue").tooltip(
+                    _("create_project")
+                ).props("tooltip-position=top")
                 project_name.on(
                     "keydown.enter",
                     create_project,
@@ -212,9 +216,12 @@ def register():
                                 dlg.open()
 
                             ui.button(
-                                _("delete"),
                                 on_click=delete_project,
-                            ).props("outline color=red").classes("border-button")
+                            ).props(
+                                'icon="delete_outline" flat dense'
+                            ).classes("wd-icon-red").tooltip(
+                                _("delete")
+                            ).props("tooltip-position=top")
 
                         # ── Existing databases (sub-card) ──────
                         # Lists all databases within this project, with
@@ -486,11 +493,12 @@ def register():
                                                     )
                                             dlg.open()
                                         ui.button(
-                                            _("delete"),
                                             on_click=delete_db,
                                         ).props(
-                                            "outline color=red size=md"
-                                        ).classes("border-button")
+                                            'icon="delete" flat dense'
+                                        ).classes("wd-icon-red").tooltip(
+                                            _("delete")
+                                        ).props("tooltip-position=top")
 
                         # ── Create database (sub-card) ─────────
                         # Input for new database name + optional API password
@@ -570,9 +578,12 @@ def register():
                                             )
 
                                 ui.button(
-                                    _("create_database"),
                                     on_click=create_db,
-                                ).props("outline color=amber").classes("border-button")
+                                ).props(
+                                    'icon="storage" flat dense'
+                                ).classes("wd-icon-amber").tooltip(
+                                    _("create_database")
+                                ).props("tooltip-position=top")
                                 new_db_name.on(
                                     "keydown.enter",
                                     create_db,

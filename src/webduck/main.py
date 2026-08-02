@@ -164,6 +164,15 @@ html {{
 .q-btn--flat .q-btn__content {{
     color: {TEXT_SOFT} !important;
 }}
+.q-btn--flat.wd-icon-blue .q-btn__content {{
+    color: #5898d4 !important;
+}}
+.q-btn--flat.wd-icon-red .q-btn__content {{
+    color: #F44336 !important;
+}}
+.q-btn--flat.wd-icon-amber .q-btn__content {{
+    color: #FFC107 !important;
+}}
 .q-btn--outline {{
     border-color: #555 !important;
 }}
