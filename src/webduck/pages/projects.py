@@ -17,6 +17,7 @@ set per-database API passwords, and reorder projects by dragging the
 ``/api/reorder-projects``.
 """
 
+import asyncio
 import secrets
 
 from nicegui import app as nicegui_app
@@ -25,6 +26,7 @@ from nicegui import ui
 from webduck.auth.manager import ProjectAuth
 from webduck.pages import context as ctx
 from webduck.pages.context import (
+    BG_CARD,
     TEXT_SOFT,
     YELLOW,
     YELLOW_LIGHT,
@@ -35,6 +37,16 @@ from webduck.pages.ui_helpers import (
     make_footer,
     make_header,
 )
+
+
+def _fmt_bytes(num: int) -> str:
+    """Format a byte count as a human-readable string (e.g. '1.2 GB')."""
+    value = float(num)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{num} B"
 
 
 def register():
@@ -313,6 +325,122 @@ def register():
                                             'icon="key" flat dense'
                                         ).style("color: #888;").tooltip(
                                             _("change_password")
+                                        ).props("tooltip-position=top")
+
+                                        # Database compress with confirmation dialog.
+                                        async def compress_db(
+                                            p=project, d=db_name
+                                        ):
+                                            size = ctx.storage.database_size(p, d)
+                                            size_label = (
+                                                _fmt_bytes(size)
+                                                if size is not None else "?"
+                                            )
+                                            with ui.dialog() as dlg, ui.card().classes(
+                                                "items-center gap-4"
+                                            ).style(
+                                                "background: #1E1E1E; border-radius: 12px; "
+                                                "padding: 24px 32px;"
+                                            ):
+                                                ui.label(
+                                                    _("confirm_compress_database").format(
+                                                        d, size_label
+                                                    )
+                                                ).style(f"color: {TEXT_SOFT}")
+                                                with ui.row().classes("gap-2"):
+                                                    ui.button(
+                                                        _("cancel"),
+                                                        on_click=dlg.close,
+                                                    ).props("outline color=grey").classes(
+                                                        "border-button"
+                                                    )
+
+                                                    async def do_compress():
+                                                        dlg.close()
+                                                        # Modal spinner while the compaction runs.
+                                                        with ui.dialog() as pdlg, ui.card().classes(
+                                                            "items-center gap-4"
+                                                        ).style(
+                                                            f"background: {BG_CARD}; "
+                                                            "border-radius: 12px; "
+                                                            "padding: 32px 48px;"
+                                                        ):
+                                                            ui.spinner(
+                                                                size="xl", color="amber"
+                                                            )
+                                                            ui.label(
+                                                                _("compressing")
+                                                            ).style(
+                                                                f"color: {YELLOW_LIGHT}"
+                                                            )
+                                                        pdlg.open()
+                                                        try:
+                                                            result = await asyncio.to_thread(
+                                                                ctx.storage.compact_database,
+                                                                p,
+                                                                d,
+                                                            )
+                                                        except Exception as e:
+                                                            from webduck.logging import log_error
+                                                            log_error(
+                                                                f"Compress error [{p}/{d}]: {e}"
+                                                            )
+                                                            result = {
+                                                                "success": False,
+                                                                "error": str(e),
+                                                            }
+                                                        pdlg.close()
+                                                        if result.get("success"):
+                                                            with (
+                                                                ui.dialog() as rdlg,
+                                                                ui.card().classes(
+                                                                    "items-center gap-4"
+                                                                ).style(
+                                                                    "background: #1E1E1E; "
+                                                                    "border-radius: 12px; "
+                                                                    "padding: 24px 32px;"
+                                                                ),
+                                                            ):
+                                                                ui.label(
+                                                                    _("compress_success").format(
+                                                                        _fmt_bytes(
+                                                                            result["size_before"]
+                                                                        ),
+                                                                        _fmt_bytes(
+                                                                            result["size_after"]
+                                                                        ),
+                                                                        result["saved_percent"],
+                                                                    )
+                                                                ).style(
+                                                                    f"color: {YELLOW_LIGHT}"
+                                                                )
+                                                                ui.button(
+                                                                    _("close"),
+                                                                    on_click=rdlg.close,
+                                                                ).props(
+                                                                    "outline color=grey"
+                                                                ).classes("border-button")
+                                                            rdlg.open()
+                                                        else:
+                                                            ui.notify(
+                                                                result.get("error")
+                                                                or _("error"),
+                                                                type="negative",
+                                                            )
+
+                                                    ui.button(
+                                                        _("compress"),
+                                                        on_click=do_compress,
+                                                    ).props(
+                                                        "outline color=amber"
+                                                    ).classes("border-button")
+                                            dlg.open()
+                                        ui.button(
+                                            on_click=compress_db,
+                                        ).props(
+                                            'icon="compress" flat dense'
+                                        ).style("color: #888;").tooltip(
+                                            _("compress_database")
                                         ).props("tooltip-position=top")
 
                                         # Database delete with confirmation dialog.

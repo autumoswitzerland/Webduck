@@ -308,6 +308,102 @@ class StorageEngine:
             db_path.unlink()
         return True
 
+    def database_size(self, project: str, database: str) -> int | None:
+        """Return the current database file size in bytes.
+
+        Returns ``None`` if the database does not exist.  This is a pure
+        file-stat — no DuckDB connection is opened.
+        """
+        db_path = self._get_db_path(project, database)
+        if not db_path.exists():
+            return None
+        return db_path.stat().st_size
+
+    def compact_database(self, project: str, database: str) -> dict[str, Any]:
+        """Compact a database to reclaim unused space.
+
+        DuckDB cannot compact a file in place: ``VACUUM`` does not reclaim
+        space and ``CHECKPOINT`` only reclaims it partially (row groups
+        with heavy deletes).  The documented way to fully reclaim space is
+        to copy the database into a fresh file with ``COPY FROM DATABASE``.
+
+        The copy runs under the exclusive (write) lock so no other
+        connection can touch the file in the meantime:
+
+          1. flush the WAL into the main file (``CHECKPOINT``),
+          2. copy the source (attached read-only) into a temporary file
+             in the same directory,
+          3. atomically replace the original file with the compacted one.
+
+        A temporary file next to the original keeps the final ``replace()``
+        on the same filesystem (atomic).  It requires free disk space
+        roughly equal to the current database size for the copy — checked
+        up front so we fail with a clear message instead of mid-copy.
+
+        Returns ``size_before`` / ``size_after`` (bytes) and
+        ``saved_percent`` on success.
+        """
+        db_path = self._get_db_path(project, database)
+        if not db_path.exists():
+            return {
+                "success": False,
+                "error": f"Database not found: {project}/{database}",
+            }
+
+        size_before = db_path.stat().st_size
+
+        import shutil
+        free = shutil.disk_usage(db_path.parent).free
+        if free < size_before:
+            return {
+                "success": False,
+                "error": (
+                    f"Not enough free disk space to compact "
+                    f"'{project}/{database}': need ~{size_before} bytes, "
+                    f"only {free} bytes available"
+                ),
+            }
+
+        lock = self._get_lock(str(db_path))
+        tmp_path = db_path.with_name(db_path.name + ".compact.tmp")
+        with lock.write():
+            try:
+                # Remove any stale temp file from a previous failed run.
+                tmp_path.unlink(missing_ok=True)
+
+                # 1. Flush the WAL into the main file so the copy is complete.
+                con = duckdb.connect(str(db_path))
+                try:
+                    con.execute("CHECKPOINT")
+                finally:
+                    con.close()
+
+                # 2. Copy the source (read-only) into a fresh file.
+                mem = duckdb.connect(":memory:")
+                try:
+                    mem.execute(f"ATTACH '{db_path}' AS src (READ_ONLY)")
+                    mem.execute(f"ATTACH '{tmp_path}' AS dst")
+                    mem.execute("COPY FROM DATABASE src TO dst")
+                finally:
+                    mem.close()
+
+                # 3. Atomically swap the compacted file in.
+                tmp_path.replace(db_path)
+            except Exception as e:
+                tmp_path.unlink(missing_ok=True)
+                return {"success": False, "error": str(e)}
+
+        size_after = db_path.stat().st_size
+        saved_bytes = max(0, size_before - size_after)
+        saved_percent = round(saved_bytes / size_before * 100) if size_before else 0
+        return {
+            "success": True,
+            "size_before": size_before,
+            "size_after": size_after,
+            "saved_bytes": saved_bytes,
+            "saved_percent": saved_percent,
+        }
+
     def delete_project(self, project: str) -> bool:
         """Delete a project and all its databases."""
         project_dir = self.data_dir / project

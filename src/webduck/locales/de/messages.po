@@ -121,6 +121,21 @@ msgstr "Datenbank löschen"
 msgid "confirm_delete_database"
 msgstr "Möchten Sie diese Datenbank wirklich löschen?"
 
+msgid "compress"
+msgstr "Kompaktieren"
+
+msgid "compress_database"
+msgstr "Datenbank kompaktieren"
+
+msgid "confirm_compress_database"
+msgstr "Datenbank '{0}' kompaktieren? Aktuelle Grösse: {1}. Die Datenbank wird kurzzeitig für alle Zugriffe gesperrt."
+
+msgid "compressing"
+msgstr "Kompaktiere..."
+
+msgid "compress_success"
+msgstr "Datenbank kompaktiert: {0} → {1} (−{2}%)"
+
 # SQL Editor
 msgid "sql_editor"
 msgstr "SQL Abfragen"
