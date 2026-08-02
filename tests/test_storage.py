@@ -217,3 +217,64 @@ class TestStorageEngine:
         (tmp_data / ".hidden").mkdir()
         (tmp_data / "file.txt").touch()
         assert sorted(storage.list_projects()) == ["alpha", "beta"]
+
+    def test_compact_database_with_foreign_keys(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+
+        # Tables with foreign keys referencing each other. COPY FROM DATABASE
+        # copies tables in arbitrary order and trips FK checks on valid data
+        # (duckdb#16785); the engine must order tables so parents come first.
+        storage.execute_query(
+            "p", "db",
+            "CREATE TABLE departments (dept_id INTEGER PRIMARY KEY, name VARCHAR); "
+            "CREATE TABLE projects (project_id INTEGER PRIMARY KEY, "
+            "dept_id INTEGER, FOREIGN KEY (dept_id) REFERENCES departments(dept_id)); "
+            "CREATE TABLE tasks (task_id INTEGER PRIMARY KEY, "
+            "project_id INTEGER, FOREIGN KEY (project_id) REFERENCES projects(project_id)); "
+            "INSERT INTO departments VALUES (1, 'Engineering'); "
+            "INSERT INTO projects VALUES (10, 1); "
+            "INSERT INTO tasks VALUES (100, 10);",
+            read_only=False,
+        )
+
+        result = storage.compact_database("p", "db")
+        assert result["success"] is True
+
+        # Data survived intact after the compact.
+        query = storage.execute_query(
+            "p", "db", "SELECT * FROM tasks JOIN projects USING (project_id) "
+            "JOIN departments USING (dept_id)"
+        )
+        assert query["success"] is True
+        assert query["row_count"] == 1
+
+    def test_compact_database_missing(self, storage):
+        result = storage.compact_database("p", "db")
+        assert result["success"] is False
+        assert "not found" in result["error"].lower()
+
+    def test_compact_database_self_referential_fk(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+
+        # A self-referential foreign key cannot be populated with a multi-row
+        # INSERT in DuckDB (duckdb#7168); the engine must copy such tables
+        # row-by-row during compaction.
+        storage.execute_query(
+            "p", "db",
+            "CREATE TABLE emp (id INTEGER PRIMARY KEY, name VARCHAR, "
+            "manager_id INTEGER, "
+            "FOREIGN KEY (manager_id) REFERENCES emp(id)); "
+            "INSERT INTO emp VALUES (1, 'ceo', NULL); "
+            "INSERT INTO emp VALUES (2, 'vp', 1); "
+            "INSERT INTO emp VALUES (3, 'eng', 2);",
+            read_only=False,
+        )
+
+        result = storage.compact_database("p", "db")
+        assert result["success"] is True
+
+        query = storage.execute_query("p", "db", "SELECT * FROM emp ORDER BY id")
+        assert query["success"] is True
+        assert query["rows"] == [[1, "ceo", None], [2, "vp", 1], [3, "eng", 2]]

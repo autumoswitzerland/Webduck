@@ -136,6 +136,12 @@ msgstr "Compressing..."
 msgid "compress_success"
 msgstr "Database compressed: {0} → {1} (−{2}%)"
 
+msgid "compress_no_gain"
+msgstr "The database was already compact — no space could be reclaimed."
+
+msgid "compress_grew"
+msgstr "The database was already compact and grew slightly when it was rewritten ({0} → {1}, +{2}%). No data was lost — rewriting distributes the data slightly differently across DuckDB's storage blocks, which is normal."
+
 # SQL Editor
 msgid "sql_editor"
 msgstr "SQL Queries"

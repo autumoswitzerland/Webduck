@@ -4,7 +4,7 @@ rootdir: /Users/Mike/Development/git-ext/WebDuck
 configfile: pyproject.toml
 plugins: asyncio-1.4.0, anyio-4.14.2
 asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 140 items
+collected 143 items
 
 tests/test_api_admin.py   PASS  test_login_success
 .  PASS  test_login_wrong_password
@@ -23,7 +23,7 @@ tests/test_api_admin.py   PASS  test_login_success
 .  PASS  test_create_user
 .  PASS  test_delete_user
 .  PASS  test_cannot_delete_self
-.                                [ 12%]
+.                                [ 11%]
 tests/test_api_db.py   PASS  test_select
 .  PASS  test_invalid_sql
 .  PASS  test_query_nonexistent_db
@@ -34,7 +34,7 @@ tests/test_api_db.py   PASS  test_select
 .  PASS  test_list_tables
 .  PASS  test_list_projects
 .  PASS  test_list_databases
-.                                          [ 19%]
+.                                          [ 18%]
 tests/test_auth.py   PASS  test_create_and_verify_user
 .  PASS  test_create_duplicate_user
 .  PASS  test_verify_wrong_password
@@ -56,7 +56,7 @@ tests/test_config.py   PASS  test_default_config
 .  PASS  test_load_nonexistent_returns_defaults
 .  PASS  test_save_and_load_roundtrip
 .  PASS  test_save_config_serializes_path
-.                                                [ 33%]
+.                                                [ 32%]
 tests/test_full_api.py   PASS  test_login
 .  PASS  test_login_wrong_password
 .  PASS  test_login_nonexistent
@@ -103,7 +103,7 @@ tests/test_full_api.py   PASS  test_login
 .  PASS  test_delete_remaining
 .  PASS  test_health
 .  PASS  test_parallel_reads_over_http
-.    [ 66%]
+.    [ 65%]
 tests/test_logging.py   PASS  test_logging_disabled_by_default
 .  PASS  test_logging_enabled_creates_file
 .  PASS  test_log_query_does_nothing_when_disabled
@@ -111,7 +111,7 @@ tests/test_logging.py   PASS  test_logging_disabled_by_default
 .  PASS  test_log_query_error
 .  PASS  test_rotation_config
 .  PASS  test_get_logger_returns_consistent_instance
-.                                            [ 71%]
+.                                            [ 69%]
 tests/test_sql_upload.py   PASS  test_all_statements_succeed
 .  PASS  test_statement_count
 .  PASS  test_tables_created
@@ -133,7 +133,7 @@ tests/test_sql_upload.py   PASS  test_all_statements_succeed
 .  PASS  test_stop_on_first_error
 .  PASS  test_empty_sql_returns_empty
 .  PASS  test_whitespace_only_sql
-.                           [ 86%]
+.                           [ 84%]
 tests/test_storage.py   PASS  test_list_projects_empty
 .  PASS  test_create_and_list_databases
 .  PASS  test_create_duplicate_database
@@ -153,8 +153,11 @@ tests/test_storage.py   PASS  test_list_projects_empty
 .  PASS  test_import_data_dispatch
 .  PASS  test_detect_format
 .  PASS  test_list_projects_finds_dirs
-.                                [100%]
+.  PASS  test_compact_database_with_foreign_keys
+.  PASS  test_compact_database_missing
+.  PASS  test_compact_database_self_referential_fk
+.                             [100%]
 
-  140/140 tests passed
+  143/143 tests passed
 
-============================= 140 passed in 47.53s =============================
+============================= 143 passed in 46.30s =============================

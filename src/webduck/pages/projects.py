@@ -19,6 +19,7 @@ set per-database API passwords, and reorder projects by dragging the
 
 import asyncio
 import secrets
+from urllib.parse import quote
 
 from nicegui import app as nicegui_app
 from nicegui import ui
@@ -47,6 +48,25 @@ def _fmt_bytes(num: int) -> str:
             return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
         value /= 1024
     return f"{num} B"
+
+
+# Filled database-cylinder icon with an add-plus knockout, mirroring the
+# filled project icon (create_new_folder). The cylinder is filled amber and
+# the plus is punched out of it via an evenodd sub-path. Inlined as a data
+# URL because Material Icons has no "database" glyph; the amber fill matches
+# the "wd-icon-amber" class applied to the button.
+_DB_PLUS_ICON = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#FFC107">'
+    '<path fill-rule="evenodd" d="'
+    'M3 5.5C3 3.57 7.03 2 12 2C16.97 2 21 3.57 21 5.5V18.5'
+    'C21 20.43 16.97 22 12 22C7.03 22 3 20.43 3 18.5Z'
+    'M14 8.75h2v3h3v2h-3v3h-2v-3h-3v-2h3z'
+    '"/>'
+    "</svg>"
+)
+_DB_PLUS_ICON_URL = (
+    "data:image/svg+xml;utf8," + quote(_DB_PLUS_ICON)
+)
 
 
 def register():
@@ -398,36 +418,65 @@ def register():
                                                             }
                                                         pdlg.close()
                                                         if result.get("success"):
-                                                            with (
-                                                                ui.dialog() as rdlg,
-                                                                ui.card().classes(
-                                                                    "items-center gap-4"
-                                                                ).style(
-                                                                    "background: #1E1E1E; "
-                                                                    "border-radius: 12px; "
-                                                                    "padding: 24px 32px;"
-                                                                ),
-                                                            ):
-                                                                ui.label(
+                                                            def _result_dialog(text, color):
+                                                                with (
+                                                                    ui.dialog() as rdlg,
+                                                                    ui.card().classes(
+                                                                        "items-center gap-4"
+                                                                    ).style(
+                                                                        "background: #1E1E1E; "
+                                                                        "border-radius: 12px; "
+                                                                        "padding: 24px 32px;"
+                                                                    ),
+                                                                ):
+                                                                    ui.label(text).style(
+                                                                        f"color: {color}"
+                                                                    )
+                                                                    ui.button(
+                                                                        _("close"),
+                                                                        on_click=rdlg.close,
+                                                                    ).props(
+                                                                        "outline color=grey"
+                                                                    ).classes(
+                                                                        "border-button"
+                                                                    )
+                                                                rdlg.open()
+
+                                                            if result["saved_bytes"] > 0:
+                                                                _result_dialog(
                                                                     _("compress_success").format(
                                                                         _fmt_bytes(
-                                                                            result["size_before"]
+                                                                            result[
+                                                                                "size_before"
+                                                                            ]
                                                                         ),
                                                                         _fmt_bytes(
                                                                             result["size_after"]
                                                                         ),
                                                                         result["saved_percent"],
-                                                                    )
-                                                                ).style(
-                                                                    f"color: {YELLOW_LIGHT}"
+                                                                    ),
+                                                                    YELLOW_LIGHT,
                                                                 )
-                                                                ui.button(
-                                                                    _("close"),
-                                                                    on_click=rdlg.close,
-                                                                ).props(
-                                                                    "outline color=grey"
-                                                                ).classes("border-button")
-                                                            rdlg.open()
+                                                            elif result["grew_bytes"] > 0:
+                                                                _result_dialog(
+                                                                    _("compress_grew").format(
+                                                                        _fmt_bytes(
+                                                                            result[
+                                                                                "size_before"
+                                                                            ]
+                                                                        ),
+                                                                        _fmt_bytes(
+                                                                            result["size_after"]
+                                                                        ),
+                                                                        result["grew_percent"],
+                                                                    ),
+                                                                    TEXT_SOFT,
+                                                                )
+                                                            else:
+                                                                _result_dialog(
+                                                                    _("compress_no_gain"),
+                                                                    TEXT_SOFT,
+                                                                )
                                                         else:
                                                             ui.notify(
                                                                 result.get("error")
@@ -580,7 +629,7 @@ def register():
                                 ui.button(
                                     on_click=create_db,
                                 ).props(
-                                    'icon="storage" flat dense'
+                                    f'icon="img:{_DB_PLUS_ICON_URL}" flat dense'
                                 ).classes("wd-icon-amber").tooltip(
                                     _("create_database")
                                 ).props("tooltip-position=top")

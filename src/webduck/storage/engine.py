@@ -327,12 +327,22 @@ class StorageEngine:
         with heavy deletes).  The documented way to fully reclaim space is
         to copy the database into a fresh file with ``COPY FROM DATABASE``.
 
+        ``COPY FROM DATABASE`` with both schema and data copies tables in an
+        arbitrary order, which trips DuckDB's foreign-key checks on valid
+        data (known issue, duckdb#16785/#24215): a child table is inserted
+        before its parent and DuckDB rejects it.  We therefore copy the
+        schema first (``COPY FROM DATABASE ... (SCHEMA)``) and then stream
+        the data table-by-table, ordered by foreign-key dependencies so
+        parents always precede their children.  Tables with self-referential
+        foreign keys are copied row-by-row (duckdb#7168).
+
         The copy runs under the exclusive (write) lock so no other
         connection can touch the file in the meantime:
 
           1. flush the WAL into the main file (``CHECKPOINT``),
           2. copy the source (attached read-only) into a temporary file
-             in the same directory,
+             in the same directory — schema first, then data ordered by
+             foreign-key dependencies,
           3. atomically replace the original file with the compacted one.
 
         A temporary file next to the original keeps the final ``replace()``
@@ -383,7 +393,32 @@ class StorageEngine:
                 try:
                     mem.execute(f"ATTACH '{db_path}' AS src (READ_ONLY)")
                     mem.execute(f"ATTACH '{tmp_path}' AS dst")
-                    mem.execute("COPY FROM DATABASE src TO dst")
+                    # Schema first (tables, constraints, sequences, views,
+                    # macros), then data. A single "COPY FROM DATABASE" would
+                    # insert tables in an arbitrary order and fail DuckDB's
+                    # foreign-key checks on valid data (duckdb#16785).
+                    mem.execute("COPY FROM DATABASE src TO dst (SCHEMA)")
+                    order, self_refs = self._fk_ordered_tables(mem, "src")
+                    for table in order:
+                        if table in self_refs:
+                            # duckdb#7168: a self-referential foreign key
+                            # cannot be populated with a multi-row INSERT;
+                            # rows must be inserted one at a time.
+                            rows = mem.execute(
+                                f'SELECT * FROM src."{table}"'
+                            ).fetchall()
+                            if rows:
+                                placeholders = ", ".join("?" * len(rows[0]))
+                                for row in rows:
+                                    mem.execute(
+                                        f'INSERT INTO dst."{table}" '
+                                        f"VALUES ({placeholders})",
+                                        row,
+                                    )
+                        else:
+                            mem.execute(
+                                f'INSERT INTO dst."{table}" SELECT * FROM src."{table}"'
+                            )
                 finally:
                     mem.close()
 
@@ -395,14 +430,72 @@ class StorageEngine:
 
         size_after = db_path.stat().st_size
         saved_bytes = max(0, size_before - size_after)
-        saved_percent = round(saved_bytes / size_before * 100) if size_before else 0
+        saved_percent = round(saved_bytes / size_before * 100, 1) if size_before else 0
+        grew_bytes = max(0, size_after - size_before)
+        grew_percent = round(grew_bytes / size_before * 100, 1) if size_before else 0
         return {
             "success": True,
             "size_before": size_before,
             "size_after": size_after,
             "saved_bytes": saved_bytes,
             "saved_percent": saved_percent,
+            "grew_bytes": grew_bytes,
+            "grew_percent": grew_percent,
         }
+
+    @staticmethod
+    def _fk_ordered_tables(
+        con: duckdb.DuckDBPyConnection, catalog: str
+    ) -> tuple[list[str], set[str]]:
+        """Return base-table names ordered so referenced tables come first.
+
+        A single ``COPY FROM DATABASE`` inserts tables in an arbitrary order
+        and trips DuckDB's foreign-key checks on otherwise valid data
+        (duckdb#16785/#24215).  Copying each table's data separately in
+        dependency order — parents before children — sidesteps the bug.
+
+        The foreign-key graph of a DuckDB database is acyclic (``ALTER TABLE``
+        support for adding constraints is not implemented), so a plain
+        post-order DFS is sufficient.  Self-referential foreign keys are a
+        special case: DuckDB cannot insert multiple rows referencing each
+        other in one statement (duckdb#7168), so those tables must be copied
+        row-by-row.  The second return value lists them.
+        """
+        tables = [r[0] for r in con.execute(
+            f"SELECT table_name FROM information_schema.tables "
+            f"WHERE table_catalog = '{catalog}' AND table_schema = 'main' "
+            f"AND table_type = 'BASE TABLE'"
+        ).fetchall()]
+        referenced_by = {t: set() for t in tables}
+        self_refs: set[str] = set()
+        for t in tables:
+            rows = con.execute(
+                f"SELECT referenced_table FROM duckdb_constraints() "
+                f"WHERE database_name = '{catalog}' AND schema_name = 'main' "
+                f"AND table_name = '{t}' AND constraint_type = 'FOREIGN KEY'"
+            ).fetchall()
+            for (ref,) in rows:
+                if not ref or ref not in referenced_by:
+                    continue
+                if ref == t:
+                    self_refs.add(t)
+                else:
+                    referenced_by[t].add(ref)
+
+        ordered: list[str] = []
+        visited: set[str] = set()
+
+        def visit(table: str) -> None:
+            if table in visited:
+                return
+            visited.add(table)
+            for ref in sorted(referenced_by[table]):
+                visit(ref)
+            ordered.append(table)
+
+        for table in tables:
+            visit(table)
+        return ordered, self_refs
 
     def delete_project(self, project: str) -> bool:
         """Delete a project and all its databases."""

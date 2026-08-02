@@ -136,6 +136,12 @@ msgstr "Kompaktiere..."
 msgid "compress_success"
 msgstr "Datenbank kompaktiert: {0} → {1} (−{2}%)"
 
+msgid "compress_no_gain"
+msgstr "Die Datenbank war bereits kompakt — es konnte kein Speicherplatz zurückgewonnen werden."
+
+msgid "compress_grew"
+msgstr "Die Datenbank war bereits kompakt und ist beim erneuten Schreiben leicht angewachsen ({0} → {1}, +{2}%). Es gingen keine Daten verloren — beim Neuschreiben verteilt DuckDB die Daten minimal anders auf ihre Speicherblöcke, das ist normal."
+
 # SQL Editor
 msgid "sql_editor"
 msgstr "SQL Abfragen"
