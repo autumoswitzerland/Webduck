@@ -341,7 +341,9 @@ class StorageEngine:
                 con.close()
         if row is None:
             return None
-        total = int(row[4])
+        # PRAGMA database_size columns: database_name, database_size,
+        # block_size, total_blocks, used_blocks, free_blocks.
+        total = int(row[3])
         free = int(row[5])
         if total <= 0:
             return None

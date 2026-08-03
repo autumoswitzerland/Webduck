@@ -24,9 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each database name, formatted with decimal units so it matches file
   managers like the macOS Finder and Windows Explorer.
 - Compress recommendation: the compress icon next to a database lights up
-  amber when fragmentation (free/total blocks) reaches 10 %, with a tooltip
-  hinting that compression is recommended; the icon turns grey again after a
-  successful compact.
+  amber when fragmentation (free/total blocks) reaches 20 % in databases of
+  at least 10 MB, with a tooltip hinting that compression is recommended; the
+  icon turns grey again after a successful compact.
 - SQL editor shortcut hint as a tooltip on the "SQL" label (Alt+Enter to run
   the query, Alt+Up/Alt+Down to browse the history).
 

@@ -144,13 +144,17 @@ def register():
 
         # ── Card 2: SQL Queries ────────────────────────────────
         with ui.card().classes("w-full q-mt-sm"):
-            ui.label(_("sql_queries")).classes(
-                "text-h5"
-            ).style(f"color: {YELLOW_LIGHT}")
+            with ui.row().classes("items-baseline gap-2"):
+                ui.label(_("sql_queries")).classes(
+                    "text-h5"
+                ).style(f"color: {YELLOW_LIGHT}")
+                ui.label(_("sql_editor_hint")).classes(
+                    "text-caption"
+                ).style("color: #888; font-size: 0.9em;")
 
             ui.label("SQL").classes(
                 "text-caption text-bold q-mb-xs"
-            ).tooltip(_("sql_editor_hint"))
+            )
             sql_input = ui.textarea(
                 placeholder="SELECT * FROM table_name",
             ).classes("w-full")

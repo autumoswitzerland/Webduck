@@ -92,12 +92,26 @@ def register():
         make_drawer(_)
         make_footer(_)
 
-        from webduck.main import COMPRESS_FRAGMENTATION_THRESHOLD
+        from webduck.main import (
+            COMPRESS_FRAGMENTATION_THRESHOLD,
+            COMPRESS_MIN_DB_SIZE,
+        )
 
         # Background fragmentation check: highlights a compress icon in amber
         # when compaction is recommended, without blocking the page render.
-        async def _update_compress_icon(p: str, d: str, btn, tip):
+        # Only databases above COMPRESS_MIN_DB_SIZE are considered at all —
+        # compacting small databases is not worth the effort.
+        async def _update_compress_icon(p: str, d: str, btn, tip, size_label=None):
             try:
+                size = await asyncio.to_thread(
+                    ctx.storage.database_size, p, d
+                )
+                # Keep the displayed database size in sync (e.g. after a
+                # successful compact the file shrank).
+                if size is not None and size_label is not None:
+                    size_label.set_text(_fmt_bytes(size))
+                if size is None or size < COMPRESS_MIN_DB_SIZE:
+                    return
                 frag = await asyncio.to_thread(
                     ctx.storage.fragmentation, p, d
                 )
@@ -302,8 +316,9 @@ def register():
                                         _size = ctx.storage.database_size(
                                             project, db_name
                                         )
+                                        _size_label = None
                                         if _size is not None:
-                                            ui.label(
+                                            _size_label = ui.label(
                                                 _fmt_bytes(_size)
                                             ).classes(
                                                 "text-caption"
@@ -398,6 +413,49 @@ def register():
                                             p=project, d=db_name
                                         ):
                                             size = ctx.storage.database_size(p, d)
+                                            # Re-check the current state on click: the
+                                            # background hint from page load may be stale
+                                            # (DuckDB can reclaim trailing free blocks on
+                                            # its own in the meantime), so a compact would
+                                            # gain nothing — don't offer one then.
+                                            frag = None
+                                            try:
+                                                if (
+                                                    size is not None
+                                                    and size >= COMPRESS_MIN_DB_SIZE
+                                                ):
+                                                    frag = await asyncio.to_thread(
+                                                        ctx.storage.fragmentation, p, d
+                                                    )
+                                            except Exception:
+                                                frag = None
+                                            if (
+                                                frag is not None
+                                                and frag < COMPRESS_FRAGMENTATION_THRESHOLD
+                                            ):
+                                                for (
+                                                    _p,
+                                                    _d,
+                                                    _btn,
+                                                    _tip,
+                                                    _sizelabel,
+                                                ) in _compress_btns:
+                                                    if (_p, _d) == (p, d):
+                                                        _btn.classes(
+                                                            remove="wd-icon-amber"
+                                                        )
+                                                        _tip.set_text(
+                                                            _("compress_database")
+                                                        )
+                                                        if _sizelabel is not None:
+                                                            _sizelabel.set_text(
+                                                                _fmt_bytes(size)
+                                                            )
+                                                ui.notify(
+                                                    _("compress_no_gain"),
+                                                    type="info",
+                                                )
+                                                return
                                             size_label = (
                                                 _fmt_bytes(size)
                                                 if size is not None else "?"
@@ -466,11 +524,16 @@ def register():
                                                                 _d,
                                                                 _btn,
                                                                 _tip,
+                                                                _sizelabel,
                                                             ) in _compress_btns:
                                                                 if (_p, _d) == (p, d):
                                                                     asyncio.create_task(
                                                                         _update_compress_icon(
-                                                                            _p, _d, _btn, _tip
+                                                                            _p,
+                                                                            _d,
+                                                                            _btn,
+                                                                            _tip,
+                                                                            _sizelabel,
                                                                         )
                                                                     )
                                                             def _result_dialog(text, color):
@@ -566,6 +629,7 @@ def register():
                                                 db_name,
                                                 _compress_btn,
                                                 _compress_tip,
+                                                _size_label,
                                             )
                                         )
 
@@ -621,9 +685,11 @@ def register():
 
                                 # Fire one background fragmentation check per
                                 # database, right after the list is rendered.
-                                for _p, _d, _btn, _tip in _compress_btns:
+                                for _p, _d, _btn, _tip, _sizelabel in _compress_btns:
                                     asyncio.create_task(
-                                        _update_compress_icon(_p, _d, _btn, _tip)
+                                        _update_compress_icon(
+                                            _p, _d, _btn, _tip, _sizelabel
+                                        )
                                     )
 
                         # ── Create database (sub-card) ─────────

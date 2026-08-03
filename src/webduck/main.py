@@ -87,8 +87,11 @@ _export_tokens: dict[str, Path] = {}
 QUERY_HISTORY_MAX = 20
 
 # Fragmentation threshold (free_blocks / total_blocks) above which the
-# compress icon lights up amber to suggest a database compaction.
-COMPRESS_FRAGMENTATION_THRESHOLD = 0.10
+# compress icon lights up amber to suggest a database compaction. Only
+# databases at least COMPRESS_MIN_DB_SIZE bytes in size are considered, as
+# compacting small databases is not worth the effort.
+COMPRESS_FRAGMENTATION_THRESHOLD = 0.20
+COMPRESS_MIN_DB_SIZE = 10 * 1024 * 1024
 
 # ---------------------------------------------------------------------------
 # Global dark-theme CSS injected into every NiceGUI page via ui.add_head_html().
