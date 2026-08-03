@@ -24,8 +24,9 @@
 - **Web UI** (NiceGUI) — dark mode with yellow/amber theme
 - **JWT authentication** for admin API, optional project-key auth for database access
 - **bcrypt password hashing** (never plaintext)
-- **SQL editor** — multi-statement support with sequential execution
+- **SQL editor** — multi-statement support with sequential execution, query history (Alt+Up/Alt+Down, Alt+Enter)
 - **SQL upload** — execute multi-statement SQL scripts from files
+- **Database compression** — reclaims space DuckDB leaves behind after updates/deletes; a hint highlights databases with high fragmentation
 - **Browse view** — tree-based navigation of databases/tables/views with infinite scroll and cell editing
 - **Import/Export** — CSV, Parquet and JSON import via drag & drop, export with browser download
 - **Project ordering** — drag & drop reordering, persisted in `.projects.json`
@@ -132,8 +133,8 @@ server:
 |------|-----|-------------|
 | Login | `/ui/login` | Admin login with language selection |
 | Dashboard | `/ui/dashboard` | Server status, project/database overview |
-| Projects | `/ui/projects` | Create/delete projects, manage databases, set passwords, drag & drop reorder |
-| Queries | `/ui/query` | SQL editor (multi-statement) + SQL file upload |
+| Projects | `/ui/projects` | Create/delete projects, manage databases, set passwords, drag & drop reorder, database sizes + compression hint |
+| Queries | `/ui/query` | SQL editor (multi-statement) + SQL file upload, query history (Alt+Up/Alt+Down) |
 | Browse | `/ui/browse` | Tree navigation, table/view browsing with infinite scroll, cell editing |
 | Import/Export | `/ui/import` | CSV, Parquet and JSON import (drag & drop) and export (browser download) |
 
