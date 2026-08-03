@@ -771,12 +771,12 @@ class StorageEngine:
         """
         candidates = ["$", "|", ":", "~", ";"]
         try:
-            with open(csv_path, "r", errors="replace") as f:
+            with open(csv_path, errors="replace") as f:
                 lines = [line.rstrip("\n\r") for _, line in zip(range(50), f)]
         except Exception:
             return None
 
-        lines = [l for l in lines if l.strip()]
+        lines = [line for line in lines if line.strip()]
         if len(lines) < 2:
             return None
 

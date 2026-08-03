@@ -83,6 +83,9 @@ _icon: str = ""
 # In-memory store for pending exports: token -> Path.
 _export_tokens: dict[str, Path] = {}
 
+# Max number of saved queries per user per database (query history).
+QUERY_HISTORY_MAX = 20
+
 # ---------------------------------------------------------------------------
 # Global dark-theme CSS injected into every NiceGUI page via ui.add_head_html().
 #
@@ -181,6 +184,23 @@ html {{
 }}
 .q-tree__icon {{
     color: #d0d0d0 !important;
+}}
+.q-query-history {{
+    background: #282828 !important;
+}}
+.query-history-entry {{
+    cursor: pointer;
+    color: #E0E0E0;
+    font-size: 0.85em;
+    white-space: nowrap;
+    padding: 0.2rem 0.2rem 0.2rem 0.2rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-radius: 4px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}}
+.query-history-entry:hover {{
+    background-color: rgba(255, 255, 255, 0.08);
 }}
 .text-caption {{
     color: {TEXT_DIM} !important;
@@ -283,8 +303,7 @@ def setup_app(cfg: WebDuckConfig) -> FastAPI:
         return RedirectResponse(url="/ui")
 
     from fastapi import Request
-    from fastapi.responses import JSONResponse, FileResponse
-    import secrets as _secrets
+    from fastapi.responses import FileResponse, JSONResponse
 
     @app.get("/export/{token}")
     async def export_download(token: str):
@@ -479,6 +498,13 @@ def main():
         # Provides shared services (config, storage, auth) to all page modules
         from webduck.pages.context import init_context
         init_context(cfg, _storage, _auth, _project_auth)
+
+        # --- Prune stale user data (prefs + query history) ---
+        # Drop references to projects/databases that no longer exist.
+        # Afterwards it also runs lazily at most once per hour whenever a
+        # page accessor is called, so long-running servers stay clean.
+        from webduck.pages.user_prefs import prune_user_data
+        prune_user_data()
 
         # --- Register NiceGUI pages ---
         # Each page module exposes a ``register()`` that binds a URL route

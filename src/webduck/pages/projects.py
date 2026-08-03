@@ -637,7 +637,7 @@ def register():
                                     "keydown.enter",
                                     create_db,
                                 )
-                                
+
         else:
             with ui.card().classes("w-full q-mt-sm"):
                 ui.label(_("no_projects_found")).classes(

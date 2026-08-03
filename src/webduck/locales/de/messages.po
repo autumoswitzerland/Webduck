@@ -179,6 +179,12 @@ msgstr "%d Zeilen gelöscht"
 msgid "query_executed"
 msgstr "Abfrage erfolgreich ausgeführt"
 
+msgid "query_history"
+msgstr "Abfrage-Verlauf"
+
+msgid "no_history"
+msgstr "Noch keine gespeicherten Abfragen"
+
 msgid "row_returned"
 msgstr "%d Zeile zurückgegeben"
 

@@ -125,7 +125,7 @@ def register():
                     for code in get_supported_languages()
                 }
 
-                lang_select = ui.select(
+                ui.select(
                     lang_options,
                     value=saved_lang,
                     on_change=lambda e: (

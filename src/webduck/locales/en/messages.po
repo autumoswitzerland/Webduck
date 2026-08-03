@@ -179,6 +179,12 @@ msgstr "%d rows deleted"
 msgid "query_executed"
 msgstr "Query executed successfully"
 
+msgid "query_history"
+msgstr "Query History"
+
+msgid "no_history"
+msgstr "No saved queries yet"
+
 msgid "row_returned"
 msgstr "%d row returned"
 

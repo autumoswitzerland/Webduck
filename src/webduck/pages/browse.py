@@ -263,7 +263,7 @@ def register():
                     )
                     if not selected or selected[0] is None:
                         return
-                    
+
                     node_id = selected[0]
                     if "/" not in node_id:
                         return
@@ -583,16 +583,16 @@ def register():
                                     )
                                     if not info:
                                         return
-                                    
+
                                     # Consume the event immediately.
                                     ui.run_javascript(
                                         "window._eci = null"
                                     )
-                                
+
                                     # Views are not editable.
                                     if obj_type == "views":
                                         return
-                                        
+
                                     d = json.loads(info)
                                     ri, cn, ov = (
                                         d["r"], d["c"], d["v"]
@@ -625,7 +625,7 @@ def register():
                                         inp = ui.input(
                                             value=ov
                                         ).classes("w-full")
-                                        
+
                                         with ui.row().classes(
                                             "w-full gap-2 "
                                             "justify-end mt-2"
@@ -737,11 +737,11 @@ def register():
                                                 pk_val = all_rows[
                                                     ri
                                                 ][pk_col]
-                                                
+
                                                 # print(f"SQL: {sql}")
                                                 # print(f"VAL: {nv}")
                                                 # print(f"PK : {pk_val}")
-                                                
+
                                                 r = (
                                                     await asyncio.to_thread(
                                                         ctx.storage.execute_query,
@@ -775,17 +775,17 @@ def register():
                                                     # Note: DuckDB may report constraint errors when updating tables
                                                     # with foreign-key relationships.
                                                     error = str(r.get("error", "Update failed"))
-                                                    
+
                                                     if "Constraint Error" in error:
                                                         err_msg = _("duckdb_fk_note") + " " + error
                                                     else:
                                                         err_msg = error
-                                                    
+
                                                     ui.notification(
                                                         err_msg,
                                                         type="negative",
                                                         timeout=None,
-                                                        close_button=True                                                        
+                                                        close_button=True
                                                     )
 
                                             ui.button(

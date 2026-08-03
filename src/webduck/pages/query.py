@@ -24,7 +24,7 @@ import asyncio
 import re
 
 from nicegui import app as nicegui_app
-from nicegui import ui
+from nicegui import events, ui
 
 from webduck.pages import context as ctx
 from webduck.pages.context import (
@@ -40,7 +40,12 @@ from webduck.pages.ui_helpers import (
     make_footer,
     make_header,
 )
-from webduck.pages.user_prefs import get_user_pref, set_user_pref
+from webduck.pages.user_prefs import (
+    add_query_history,
+    get_query_history,
+    get_user_pref,
+    set_user_pref,
+)
 
 
 def register():
@@ -111,15 +116,30 @@ def register():
                         )
                         if target:
                             set_user_pref("query", "database", target)
+                        # Refresh history even if the database name is
+                        # unchanged (same name in a different project),
+                        # since on_value_change does not fire then.
+                        if history_ready[0]:
+                            render_history()
                     else:
                         database_select.set_options([], value=None)
 
                 project_select.on_value_change(update_databases)
-                database_select.on_value_change(
-                    lambda: set_user_pref(
-                        "query", "database", database_select.value
-                    ) if database_select.value else None
-                )
+
+                # Refresh the history panel when the database changes.
+                # Guarded by ``history_ready`` because the dropdown can fire
+                # during the initial page build before the panel exists.
+                history_ready = [False]
+
+                def on_database_change():
+                    if database_select.value:
+                        set_user_pref(
+                            "query", "database", database_select.value
+                        )
+                    if history_ready[0]:
+                        render_history()
+
+                database_select.on_value_change(on_database_change)
                 update_databases()
 
         # ── Card 2: SQL Queries ────────────────────────────────
@@ -132,6 +152,129 @@ def register():
             sql_input = ui.textarea(
                 placeholder="SELECT * FROM table_name",
             ).classes("w-full")
+
+            # ── Query history panel ────────────────────────────
+            # Expandable list of the user's last successful queries for
+            # the selected database, directly below the editor.  Clicking
+            # an entry loads it into the editor.  Ctrl+Up / Ctrl+Down
+            # cycle through the history in shell style (see below).
+            history_expansion = ui.expansion(
+                _("query_history"), icon="history"
+            ).classes("w-full q-mt-sm q-query-history")
+
+            with history_expansion:
+                history_list = ui.column().classes("w-full gap-1")
+
+            history_state = {"idx": None, "orig": ""}
+
+            def reset_history_state():
+                history_state["idx"] = None
+                history_state["orig"] = ""
+
+            def set_editor_sql(sql: str) -> None:
+                sql_input.value = sql
+                reset_history_state()
+                history_expansion.set_value(False)
+
+            def render_history() -> None:
+                """Render the saved queries for the current database."""
+                # Collapse first: NiceGUI/Quasar re-opens a closed expansion
+                # whenever its content is rebuilt (clear + re-add), so without
+                # this the panel would pop open after every executed query.
+                history_expansion.set_value(False)
+                project = project_select.value
+                db = database_select.value
+                history_list.clear()
+                if not project or not db:
+                    return
+                entries = get_query_history(project, db)
+                if not entries:
+                    ui.label(_("no_history")).style(
+                        f"color: {TEXT_DIM}; font-size: 0.85em;"
+                    )
+                    return
+                with history_list:
+                    for sql in entries:
+                        display = (
+                            sql if len(sql) <= 80 else sql[:80] + "…"
+                        )
+                        ui.label(display).classes("query-history-entry").tooltip(sql).on(
+                            "click", lambda s=sql: set_editor_sql(s)
+                        )
+
+            def cycle_history(direction: int) -> None:
+                """Shell-style history navigation (-1 = newer, +1 = older).
+
+                ``idx`` is ``None`` while the editor holds fresh input; the
+                first Ctrl+Up stores the current text as the "free line".
+                """
+                db = database_select.value
+                if not db:
+                    return
+                project = project_select.value
+                entries = get_query_history(project, db)
+                if not entries:
+                    return
+                if history_state["idx"] is None:
+                    history_state["idx"] = len(entries)
+                    history_state["orig"] = sql_input.value
+                idx = history_state["idx"]
+                if direction < 0:
+                    if idx > 0:
+                        idx -= 1
+                    if idx < len(entries):
+                        sql_input.value = entries[idx]
+                else:
+                    if idx is None:
+                        return
+                    idx += 1
+                    if idx >= len(entries):
+                        idx = None
+                        sql_input.value = history_state["orig"]
+                    else:
+                        sql_input.value = entries[idx]
+                history_state["idx"] = idx
+
+            async def on_editor_keydown(e: events.GenericEventArguments):
+                """Handle key events inside the SQL editor."""
+                args = e.args if isinstance(e.args, dict) else {}
+
+                # Alt+Enter
+                if args.get("altKey") and args.get("key") == "Enter":
+                    await execute_query()
+                    return
+
+                # Alt+Up / Alt+Down
+                if not args.get("altKey"):
+                    return
+                key = args.get("key")
+                if key == "ArrowUp":
+                    cycle_history(-1)
+                elif key == "ArrowDown":
+                    cycle_history(1)
+
+            sql_input.on("keydown", on_editor_keydown)
+            sql_input.on("input", lambda e: reset_history_state())
+
+            # Prevent the browser default (caret jumps to line start/end)
+            # for Alt+Arrow keys; NiceGUI's keydown handler does the rest.
+            ui.run_javascript(f"""
+                (function() {{
+                    var el = document.getElementById('{sql_input.id}');
+                    if (!el) return;
+                    var ta = el.querySelector('textarea');
+                    if (!ta) return;
+                    ta.addEventListener('keydown', function(e) {{
+                        if (e.altKey &&
+                            (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {{
+                            e.preventDefault();
+                        }}
+                    }});
+                }})();
+            """)
+
+            history_ready[0] = True
+            render_history()
 
             result_area = ui.card().classes("w-full mt-4 shadow-none")
 
@@ -258,8 +401,15 @@ def register():
                         else:
                             ui.label(data).style("color: #f64337")
                             all_ok = False
-                    # Clear the editor only if every statement succeeded.
+                    # Save the query to the per-user history and clear the
+                    # editor only if every statement succeeded.
                     if all_ok:
+                        add_query_history(
+                            project_select.value,
+                            database_select.value,
+                            sql_input.value,
+                        )
+                        render_history()
                         sql_input.value = ""
 
             ui.button(

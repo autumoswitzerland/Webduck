@@ -139,8 +139,8 @@ def register():
                 """
                 if _uploaded_file[0]:
                     return
-                import tempfile
                 import os
+                import tempfile
                 ext = os.path.splitext(e.file.name)[1] or ".upload"
                 tmp = tempfile.NamedTemporaryFile(
                     delete=False, suffix=ext

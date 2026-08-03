@@ -5,8 +5,6 @@ import json
 import duckdb
 
 
-
-
 class TestStorageEngine:
     def test_list_projects_empty(self, storage):
         assert storage.list_projects() == []
@@ -201,6 +199,7 @@ class TestStorageEngine:
 
     def test_detect_format(self):
         from pathlib import Path
+
         from webduck.storage.engine import StorageEngine
         assert StorageEngine.detect_format(Path("data.csv")) == "csv"
         assert StorageEngine.detect_format(Path("data.tsv")) == "csv"
