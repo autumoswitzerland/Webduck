@@ -41,12 +41,16 @@ from webduck.pages.ui_helpers import (
 
 
 def _fmt_bytes(num: int) -> str:
-    """Format a byte count as a human-readable string (e.g. '1.2 GB')."""
+    """Format a byte count as a human-readable string (e.g. '1.2 GB').
+
+    Uses decimal units (1000-based), matching what file managers such as
+    the macOS Finder and Windows Explorer display.
+    """
     value = float(num)
     for unit in ("B", "KB", "MB", "GB", "TB"):
-        if value < 1024 or unit == "TB":
+        if value < 1000 or unit == "TB":
             return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
-        value /= 1024
+        value /= 1000
     return f"{num} B"
 
 
@@ -87,6 +91,26 @@ def register():
         make_header(_)
         make_drawer(_)
         make_footer(_)
+
+        from webduck.main import COMPRESS_FRAGMENTATION_THRESHOLD
+
+        # Background fragmentation check: highlights a compress icon in amber
+        # when compaction is recommended, without blocking the page render.
+        async def _update_compress_icon(p: str, d: str, btn, tip):
+            try:
+                frag = await asyncio.to_thread(
+                    ctx.storage.fragmentation, p, d
+                )
+            except Exception:
+                return
+            if frag is None:
+                return
+            if frag >= COMPRESS_FRAGMENTATION_THRESHOLD:
+                btn.classes("wd-icon-amber")
+                tip.set_text(_("compress_recommended"))
+            else:
+                btn.classes(remove="wd-icon-amber")
+                tip.set_text(_("compress_database"))
 
         # ── Page title ─────────────────────────────────────
         with ui.card().classes("w-full").style("margin-top: 4px"):
@@ -257,6 +281,9 @@ def register():
                                 ui.label(_("databases")).classes(
                                     "text-caption text-bold q-mb-xs"
                                 )
+                                # Collect compress buttons so the background
+                                # fragmentation check can highlight them.
+                                _compress_btns: list = []
                                 for db_name in dbs:
                                     with ui.row().classes(
                                         "w-full items-center gap-2"
@@ -272,6 +299,18 @@ def register():
                                             '<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>'
                                         )
                                         ui.label(db_name).classes("text-body2")
+                                        _size = ctx.storage.database_size(
+                                            project, db_name
+                                        )
+                                        if _size is not None:
+                                            ui.label(
+                                                _fmt_bytes(_size)
+                                            ).classes(
+                                                "text-caption"
+                                            ).style(
+                                                "color: #888; "
+                                                "font-size: 0.75em;"
+                                            )
                                         # Show a lock icon if this database has an API password set.
                                         _pa = ctx.project_auth or ProjectAuth(ctx.storage.data_dir)
                                         has_pw = _pa.has_database_password(
@@ -418,6 +457,22 @@ def register():
                                                             }
                                                         pdlg.close()
                                                         if result.get("success"):
+                                                            # Re-check fragmentation in the
+                                                            # background so the compress icon
+                                                            # turns grey again after a
+                                                            # successful compaction.
+                                                            for (
+                                                                _p,
+                                                                _d,
+                                                                _btn,
+                                                                _tip,
+                                                            ) in _compress_btns:
+                                                                if (_p, _d) == (p, d):
+                                                                    asyncio.create_task(
+                                                                        _update_compress_icon(
+                                                                            _p, _d, _btn, _tip
+                                                                        )
+                                                                    )
                                                             def _result_dialog(text, color):
                                                                 with (
                                                                     ui.dialog() as rdlg,
@@ -491,13 +546,28 @@ def register():
                                                         "outline color=amber"
                                                     ).classes("border-button")
                                             dlg.open()
-                                        ui.button(
+                                        _compress_btn = ui.button(
                                             on_click=compress_db,
                                         ).props(
                                             'icon="compress" flat dense'
                                         ).style("color: #888;").tooltip(
                                             _("compress_database")
                                         ).props("tooltip-position=top")
+                                        # ``tooltip()`` returns the button, not
+                                        # the tooltip element, so grab the
+                                        # tooltip from the row slot to be able
+                                        # to swap its text later.
+                                        _compress_tip = (
+                                            _compress_btn.parent_slot.children[-1]
+                                        )
+                                        _compress_btns.append(
+                                            (
+                                                project,
+                                                db_name,
+                                                _compress_btn,
+                                                _compress_tip,
+                                            )
+                                        )
 
                                         # Database delete with confirmation dialog.
                                         async def delete_db(
@@ -548,6 +618,13 @@ def register():
                                         ).classes("wd-icon-red").tooltip(
                                             _("delete")
                                         ).props("tooltip-position=top")
+
+                                # Fire one background fragmentation check per
+                                # database, right after the list is rendered.
+                                for _p, _d, _btn, _tip in _compress_btns:
+                                    asyncio.create_task(
+                                        _update_compress_icon(_p, _d, _btn, _tip)
+                                    )
 
                         # ── Create database (sub-card) ─────────
                         # Input for new database name + optional API password

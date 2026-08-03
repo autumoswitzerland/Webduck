@@ -86,6 +86,10 @@ _export_tokens: dict[str, Path] = {}
 # Max number of saved queries per user per database (query history).
 QUERY_HISTORY_MAX = 20
 
+# Fragmentation threshold (free_blocks / total_blocks) above which the
+# compress icon lights up amber to suggest a database compaction.
+COMPRESS_FRAGMENTATION_THRESHOLD = 0.10
+
 # ---------------------------------------------------------------------------
 # Global dark-theme CSS injected into every NiceGUI page via ui.add_head_html().
 #

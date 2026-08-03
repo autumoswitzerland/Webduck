@@ -319,6 +319,34 @@ class StorageEngine:
             return None
         return db_path.stat().st_size
 
+    def fragmentation(self, project: str, database: str) -> float | None:
+        """Return the fragmentation ratio (free_blocks / total_blocks).
+
+        Reads ``PRAGMA database_size`` on a read-only connection under the
+        shared lock, so it never blocks other readers and cannot overlap a
+        writer.  Returns ``None`` if the database does not exist or has no
+        blocks yet.  ``0.0`` means no free blocks, ``0.5`` means half of the
+        blocks are free (i.e. reclaimable by ``compact_database``).
+        """
+        db_path = self._get_db_path(project, database)
+        if not db_path.exists():
+            return None
+
+        lock = self._get_lock(str(db_path))
+        with lock.read():
+            con = duckdb.connect(str(db_path), read_only=True)
+            try:
+                row = con.execute("PRAGMA database_size").fetchone()
+            finally:
+                con.close()
+        if row is None:
+            return None
+        total = int(row[4])
+        free = int(row[5])
+        if total <= 0:
+            return None
+        return free / total
+
     def compact_database(self, project: str, database: str) -> dict[str, Any]:
         """Compact a database to reclaim unused space.
 

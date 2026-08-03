@@ -277,3 +277,35 @@ class TestStorageEngine:
         query = storage.execute_query("p", "db", "SELECT * FROM emp ORDER BY id")
         assert query["success"] is True
         assert query["rows"] == [[1, "ceo", None], [2, "vp", 1], [3, "eng", 2]]
+
+    def test_fragmentation_missing_database(self, storage):
+        assert storage.fragmentation("p", "db") is None
+
+    def test_fragmentation_fresh_database(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        storage.execute_query(
+            "p", "db",
+            "CREATE TABLE t (id INTEGER, val VARCHAR); "
+            "INSERT INTO t VALUES (1, 'a'), (2, 'b');",
+            read_only=False,
+        )
+        frag = storage.fragmentation("p", "db")
+        assert frag is not None
+        assert 0.0 <= frag < 0.5
+
+    def test_fragmentation_after_drop_table(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        storage.execute_query(
+            "p", "db",
+            "CREATE TABLE big (id INTEGER, val VARCHAR); "
+            "INSERT INTO big SELECT i, 'row' || i FROM range(200000) r(i);",
+            read_only=False,
+        )
+        # Dropping a large table frees its blocks; the fragmentation ratio
+        # should clearly rise, which is what the compress hint detects.
+        storage.execute_query("p", "db", "DROP TABLE big", read_only=False)
+        frag = storage.fragmentation("p", "db")
+        assert frag is not None
+        assert frag >= 0.3

@@ -127,6 +127,9 @@ msgstr "Kompaktieren"
 msgid "compress_database"
 msgstr "Datenbank kompaktieren"
 
+msgid "compress_recommended"
+msgstr "Kompaktierung empfohlen — viele freie Blöcke in der Datenbank"
+
 msgid "confirm_compress_database"
 msgstr "Datenbank '{0}' kompaktieren? Aktuelle Grösse: {1}. Die Datenbank wird kurzzeitig für alle Zugriffe gesperrt."
 
@@ -181,6 +184,9 @@ msgstr "Abfrage erfolgreich ausgeführt"
 
 msgid "query_history"
 msgstr "Abfrage-Verlauf"
+
+msgid "sql_editor_hint"
+msgstr "Alt+Enter: Abfrage ausführen · Alt+↑/↓: Verlauf durchblättern"
 
 msgid "no_history"
 msgstr "Noch keine gespeicherten Abfragen"

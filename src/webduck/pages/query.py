@@ -148,7 +148,9 @@ def register():
                 "text-h5"
             ).style(f"color: {YELLOW_LIGHT}")
 
-            ui.label("SQL").classes("text-caption text-bold q-mb-xs")
+            ui.label("SQL").classes(
+                "text-caption text-bold q-mb-xs"
+            ).tooltip(_("sql_editor_hint"))
             sql_input = ui.textarea(
                 placeholder="SELECT * FROM table_name",
             ).classes("w-full")

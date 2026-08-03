@@ -127,6 +127,9 @@ msgstr "Compress"
 msgid "compress_database"
 msgstr "Compress database"
 
+msgid "compress_recommended"
+msgstr "Compression recommended — many free blocks in the database"
+
 msgid "confirm_compress_database"
 msgstr "Compress database '{0}'? Current size: {1}. The database will be briefly locked."
 
@@ -181,6 +184,9 @@ msgstr "Query executed successfully"
 
 msgid "query_history"
 msgstr "Query History"
+
+msgid "sql_editor_hint"
+msgstr "Alt+Enter: Run query · Alt+↑/↓: Browse history"
 
 msgid "no_history"
 msgstr "No saved queries yet"
