@@ -7,7 +7,7 @@ name = "webduck"
 version = "1.4.0"
 description = "A DuckDB server with REST API and Web UI"
 readme = "README.md"
-license = "MIT"
+license = "AGPL-3.0-or-later"
 requires-python = ">=3.11"
 authors = [
     { name = "autumo GmbH", email = "info@autumo.ch" }
@@ -29,7 +29,7 @@ keywords = [
     "web-ui",
 ]
 classifiers = [
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
@@ -78,7 +78,7 @@ webduck = "webduck.cli:main"
 packages = ["src/webduck"]
 
 [tool.ruff]
-line-length = 100
+line-length = 150
 target-version = "py311"
 
 [tool.ruff.lint]

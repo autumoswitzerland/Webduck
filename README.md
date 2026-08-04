@@ -8,7 +8,7 @@
   — out of the box, just like the database admin tools that come with any hosting package.
 
   <img src="https://img.shields.io/badge/version-1.4.0-FFD54F">
-  <img src="https://img.shields.io/badge/license-MIT-green">
+  <img src="https://img.shields.io/badge/license-AGPLv3-orange">
   <img src="https://img.shields.io/badge/python-3.11+-blue">
 
   <br><br>
@@ -269,7 +269,7 @@ WebDuck is free and open-source. If you find it useful, consider supporting the 
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+WebDuck is licensed under the GNU Affero General Public License v3.0 (AGPLv3) — see [LICENSE](LICENSE) for details.
 
 <br>
 <hr>

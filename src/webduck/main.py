@@ -1,12 +1,13 @@
 # ------------------------------------------------------------------------------
 # Copyright (c) 2026 autumo GmbH. All rights reserved.
 #
-# Licensed under the MIT License. See LICENSE file in the project root for
-# full license information.
+# Licensed under the GNU Affero General Public License v3.0 (AGPLv3).
+# See LICENSE file in the project root for full license information.
 #
-# NOTICE: This file is part of WebDuck. The above copyright notice and this
-# permission notice shall be included in all copies or substantial portions
-# of this software.
+# This file is part of WebDuck. WebDuck is free software: you can redistribute
+# it and/or modify it under the terms of the GNU Affero General Public License
+# as published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
 # ------------------------------------------------------------------------------
 
 # =============================================================================
@@ -91,7 +92,7 @@ QUERY_HISTORY_MAX = 20
 # databases at least COMPRESS_MIN_DB_SIZE bytes in size are considered, as
 # compacting small databases is not worth the effort.
 COMPRESS_FRAGMENTATION_THRESHOLD = 0.20
-COMPRESS_MIN_DB_SIZE = 10 * 1024 * 1024
+COMPRESS_MIN_DB_SIZE = 10 * 1000 * 1000
 
 # ---------------------------------------------------------------------------
 # Global dark-theme CSS injected into every NiceGUI page via ui.add_head_html().
@@ -558,7 +559,7 @@ def main():
         click.echo("")
         click.echo("  WebDuck v" + _version)
         click.echo("  Copyright (c) 2026 autumo GmbH")
-        click.echo("  Licensed under the MIT License")
+        click.echo("  Licensed under the GNU Affero General Public License v3.0 (AGPLv3)")
         click.echo("")
         click.echo(
             f"  Listening on  {cfg.server.host}:{cfg.server.port}"

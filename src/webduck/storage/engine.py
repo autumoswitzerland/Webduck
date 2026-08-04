@@ -1,12 +1,13 @@
 # ------------------------------------------------------------------------------
 # Copyright (c) 2026 autumo GmbH. All rights reserved.
 #
-# Licensed under the MIT License. See LICENSE file in the project root for
-# full license information.
+# Licensed under the GNU Affero General Public License v3.0 (AGPLv3).
+# See LICENSE file in the project root for full license information.
 #
-# NOTICE: This file is part of WebDuck. The above copyright notice and this
-# permission notice shall be included in all copies or substantial portions
-# of this software.
+# This file is part of WebDuck. WebDuck is free software: you can redistribute
+# it and/or modify it under the terms of the GNU Affero General Public License
+# as published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
 # ------------------------------------------------------------------------------
 
 # =============================================================================
@@ -322,10 +323,16 @@ class StorageEngine:
     def fragmentation(self, project: str, database: str) -> float | None:
         """Return the fragmentation ratio (free_blocks / total_blocks).
 
-        Reads ``PRAGMA database_size`` on a read-only connection under the
-        shared lock, so it never blocks other readers and cannot overlap a
-        writer.  Returns ``None`` if the database does not exist or has no
-        blocks yet.  ``0.0`` means no free blocks, ``0.5`` means half of the
+        Runs ``CHECKPOINT`` first (read-write connection under the exclusive
+        lock) so DuckDB reclaims trailing free blocks on its own and
+        ``PRAGMA database_size`` afterwards only reports the interior free
+        blocks that ``compact_database`` could actually reclaim.  This keeps
+        the measurement consistent with the state ``compact_database`` sees
+        (it also checkpoints first), so the compress hint only lights up when
+        a compact really has something to reclaim.
+
+        Returns ``None`` if the database does not exist or has no blocks yet.
+        ``0.0`` means no reclaimable free blocks, ``0.5`` means half of the
         blocks are free (i.e. reclaimable by ``compact_database``).
         """
         db_path = self._get_db_path(project, database)
@@ -333,9 +340,10 @@ class StorageEngine:
             return None
 
         lock = self._get_lock(str(db_path))
-        with lock.read():
-            con = duckdb.connect(str(db_path), read_only=True)
+        with lock.write():
+            con = duckdb.connect(str(db_path))
             try:
+                con.execute("CHECKPOINT")
                 row = con.execute("PRAGMA database_size").fetchone()
             finally:
                 con.close()

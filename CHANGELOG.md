@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SQL editor shortcut hint as a tooltip on the "SQL" label (Alt+Enter to run
   the query, Alt+Up/Alt+Down to browse the history).
 
+### License
+- Starting with version 1.4.0, WebDuck is licensed under the GNU Affero General
+  Public License v3.0 (AGPLv3, "or any later version").
+
 ## [1.3.0] - 2026-08-01
 
 ### Added

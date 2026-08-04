@@ -1,12 +1,13 @@
 # ------------------------------------------------------------------------------
 # Copyright (c) 2026 autumo GmbH. All rights reserved.
 #
-# Licensed under the MIT License. See LICENSE file in the project root for
-# full license information.
+# Licensed under the GNU Affero General Public License v3.0 (AGPLv3).
+# See LICENSE file in the project root for full license information.
 #
-# NOTICE: This file is part of WebDuck. The above copyright notice and this
-# permission notice shall be included in all copies or substantial portions
-# of this software.
+# This file is part of WebDuck. WebDuck is free software: you can redistribute
+# it and/or modify it under the terms of the GNU Affero General Public License
+# as published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
 # ------------------------------------------------------------------------------
 
 """Shared UI components — header, drawer, footer, dark theme.
@@ -149,7 +150,7 @@ def make_footer(_):
     with ui.footer().classes("bg-[#040d12] items-center").style("border-top: 0.9px solid #0c2736;"):
         with ui.row().classes("items-center gap-4 w-full justify-center"):
 
-            # -- Copyright block: autumo logo + "© 2026 autumo GmbH — Licensed under MIT"
+            # -- Copyright block: autumo logo + "© 2026 autumo GmbH — Licensed under AGPLv3"
             with ui.row().classes("items-center gap-1"):
                 ui.html(
                     '<img src="/static/footer-logo.png" style="height: 16px; width: auto; filter: brightness(0.65);">'
@@ -158,7 +159,7 @@ def make_footer(_):
                     f'<span style="color: #666; font-size: 0.9em;">'
                     f'&copy; 2026 <a href="{AUTUMO_URL}" target="_blank" '
                     f'style="color: #666; text-decoration: none;">autumo GmbH</a>'
-                    f' &mdash; Licensed under MIT'
+                    f' &mdash; Licensed under AGPLv3'
                     f'</span>'
                 )
 

@@ -1,12 +1,13 @@
 # ------------------------------------------------------------------------------
 # Copyright (c) 2026 autumo GmbH. All rights reserved.
 #
-# Licensed under the MIT License. See LICENSE file in the project root for
-# full license information.
+# Licensed under the GNU Affero General Public License v3.0 (AGPLv3).
+# See LICENSE file in the project root for full license information.
 #
-# NOTICE: This file is part of WebDuck. The above copyright notice and this
-# permission notice shall be included in all copies or substantial portions
-# of this software.
+# This file is part of WebDuck. WebDuck is free software: you can redistribute
+# it and/or modify it under the terms of the GNU Affero General Public License
+# as published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
 # ------------------------------------------------------------------------------
 
 """Dashboard page — landing page showing server status and project/database counts.

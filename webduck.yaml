@@ -5,7 +5,7 @@
 #  Edit this file to configure server, authentication, and logging.
 #  Initialize with: webduck init
 #
-#  Copyright (c) 2026 autumo GmbH. Licensed under the MIT License.
+#  Copyright (c) 2026 autumo GmbH. Licensed under AGPLv3.
 # =============================================================================
 
 version: "1.0.0"
