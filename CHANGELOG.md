@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   confirmation dialog. Deleting a database also removes its stored API
   password, so a restored database starts without credentials and the admin
   must set a new password. The REST API (`/db/*`, `/admin/*`) is unchanged —
-  REST deletes remain permanent.
+  REST deletes remain permanent. Trashed projects list their contained
+  databases on the Trash page.
 - Database compression ("compact") in the Web UI: each database can be
   compacted via a dedicated button, reclaiming space DuckDB leaves behind
   after updates/deletes. Handles foreign keys correctly by copying tables in
