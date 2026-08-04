@@ -254,3 +254,19 @@ def register():
                     ).style("color: #FFD54F;").tooltip(
                         _("restore")
                     ).props("tooltip-position=top")
+
+                # A trashed project keeps its databases — list them below.
+                if entry["type"] == "project" and entry.get("databases"):
+                    with ui.row().classes("items-center gap-2 q-pl-1"):
+                        ui.html(
+                            '<svg width="14" height="14" viewBox="0 0 24 24" '
+                            'fill="none" stroke="#999" stroke-width="2" '
+                            'stroke-linecap="round" stroke-linejoin="round" '
+                            'style="vertical-align: middle;">'
+                            '<ellipse cx="12" cy="5" rx="9" ry="3"/>'
+                            '<path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>'
+                            '<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>'
+                        )
+                        ui.label(
+                            f"{_('databases')}: {', '.join(entry['databases'])}"
+                        ).classes("text-caption").style("color: #888;")

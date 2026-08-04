@@ -714,6 +714,7 @@ class StorageEngine:
 
         Each entry dict contains ``name`` (trash entry name), ``type``
         ('database' or 'project'), ``project``, ``database`` (databases only),
+        ``databases`` (list of contained databases, projects only),
         ``deleted_at`` (ISO timestamp) and ``size`` (bytes). Entries are sorted
         by deletion time, newest first.
         """
@@ -727,16 +728,24 @@ class StorageEngine:
             meta = self._read_trash_meta(name) or self._parse_trash_name(name)
             if meta is None:
                 continue
-            entries.append(
-                {
-                    "name": name,
-                    "type": meta.get("type", "database"),
-                    "project": meta.get("project", ""),
-                    "database": meta.get("database"),
-                    "deleted_at": meta.get("deleted_at", ""),
-                    "size": self._trash_entry_size(path),
-                }
-            )
+            entry = {
+                "name": name,
+                "type": meta.get("type", "database"),
+                "project": meta.get("project", ""),
+                "database": meta.get("database"),
+                "deleted_at": meta.get("deleted_at", ""),
+                "size": self._trash_entry_size(path),
+            }
+            if path.is_dir():
+                # A trashed project keeps its databases as .duckdb files.
+                entry["databases"] = sorted(
+                    f.stem
+                    for f in path.glob("*.duckdb")
+                    if f.is_file()
+                )
+            else:
+                entry["databases"] = []
+            entries.append(entry)
         return entries
 
     def restore_database(self, trash_name: str, overwrite: bool = False) -> dict:

@@ -354,6 +354,24 @@ class TestTrash:
         # Restored projects land at the top of the order.
         assert storage.list_projects() == ["p", "q"]
 
+    def test_trash_project_lists_contained_databases(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db1")
+        storage.create_database("p", "db2")
+        assert storage.trash_project("p") is True
+
+        entries = storage.list_trash()
+        assert len(entries) == 1
+        assert entries[0]["type"] == "project"
+        assert entries[0]["databases"] == ["db1", "db2"]
+
+        # Database trash entries carry an empty list.
+        storage.create_project("q")
+        storage.create_database("q", "dbx")
+        assert storage.trash_database("q", "dbx") is True
+        db_entries = [e for e in storage.list_trash() if e["type"] == "database"]
+        assert db_entries[0]["databases"] == []
+
     def test_trash_project_strips_credentials(self, storage, project_auth, tmp_data):
         (tmp_data / "p").mkdir()
         storage.create_database("p", "db")
