@@ -89,6 +89,13 @@ def register():
             ui.navigate.to("/login")
             return
 
+        # Show a flash message queued before a page reload (e.g. after a
+        # successful create/delete). A plain ui.notify() would be wiped by
+        # the following reload, so the message survives it via user storage.
+        flash = nicegui_app.storage.user.pop("flash", None)
+        if flash:
+            ui.notify(flash, type="positive")
+
         make_header(_)
         make_drawer(_)
         make_footer(_)
@@ -149,10 +156,7 @@ def register():
                             project_name.value
                         )
                         if ok:
-                            ui.notify(
-                                _("success"),
-                                type="positive",
-                            )
+                            nicegui_app.storage.user["flash"] = _("success")
                             ui.navigate.reload()
                         else:
                             ui.notify(
@@ -254,11 +258,8 @@ def register():
 
                                         def do_delete():
                                             dlg.close()
-                                            if ctx.storage.delete_project(p):
-                                                ui.notify(
-                                                    _("success"),
-                                                    type="positive",
-                                                )
+                                            if ctx.storage.trash_project(p):
+                                                nicegui_app.storage.user["flash"] = _("moved_to_trash")
                                                 ui.navigate.reload()
                                             else:
                                                 ui.notify(
@@ -375,10 +376,7 @@ def register():
                                                             p, d, pw_input.value,
                                                         )
                                                         dlg.close()
-                                                        ui.notify(
-                                                            _("success"),
-                                                            type="positive",
-                                                        )
+                                                        nicegui_app.storage.user["flash"] = _("success")
                                                         ui.navigate.reload()
 
                                                 with ui.row().classes("gap-2"):
@@ -657,11 +655,19 @@ def register():
 
                                                     def do_delete():
                                                         dlg.close()
-                                                        if ctx.storage.delete_database(p, d):
-                                                            ui.notify(
-                                                                _("success"),
-                                                                type="positive",
+                                                        pa = (
+                                                            ctx.project_auth
+                                                            or ProjectAuth(
+                                                                ctx.storage.data_dir
                                                             )
+                                                        )
+                                                        if ctx.storage.trash_database(
+                                                            p, d
+                                                        ):
+                                                            pa.remove_database_password(
+                                                                p, d
+                                                            )
+                                                            nicegui_app.storage.user["flash"] = _("moved_to_trash")
                                                             ui.navigate.reload()
                                                         else:
                                                             ui.notify(
@@ -759,10 +765,7 @@ def register():
                                                     p, db_name.value,
                                                     db_password.value,
                                                 )
-                                            ui.notify(
-                                                _("success"),
-                                                type="positive",
-                                            )
+                                            nicegui_app.storage.user["flash"] = _("success")
                                             ui.navigate.reload()
                                         else:
                                             ui.notify(

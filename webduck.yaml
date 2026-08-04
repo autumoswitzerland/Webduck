@@ -21,7 +21,7 @@ logging:
     max_files: 5                  # Rotated log files to keep
     max_size_mb: 10               # Max size per log file
     query_log: false              # Log every SQL query
-    log_dir: log                   # Log directory (empty = log/)
+    log_dir: log                  # Log directory (empty = log/)
   console:
     enabled: false                # Python logger StreamHandler (stderr)
     access_log: false             # Uvicorn access log

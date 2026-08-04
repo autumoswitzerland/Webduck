@@ -28,10 +28,13 @@
 """WebDuck storage engine - DuckDB operations."""
 
 import json
+import os
+import shutil
 import threading
 import weakref
 from collections.abc import Generator
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -188,6 +191,7 @@ class StorageEngine:
             d.name
             for d in self.data_dir.iterdir()
             if d.is_dir() and not d.name.startswith(".")
+            and d.name != self.trash_dir.name
         }
 
         order_path = self._project_order_path()
@@ -237,6 +241,8 @@ class StorageEngine:
 
     def create_project(self, project: str) -> bool:
         """Create a new project directory and add to order (at top)."""
+        if project.lower() == self.trash_dir.name.lower():
+            return False
         project_dir = self.data_dir / project
         if project_dir.exists():
             return False
@@ -566,6 +572,302 @@ class StorageEngine:
             self._save_project_order(order)
 
         return True
+
+    # ------------------------------------------------------------------
+    #  Trash (soft-delete / Papierkorb)
+    # ------------------------------------------------------------------
+
+    @property
+    def trash_dir(self) -> Path:
+        """Directory holding soft-deleted databases and projects."""
+        return self.data_dir / "trash"
+
+    def _new_trash_name(self, stem: str) -> str:
+        """Generate a unique trash entry name ``{ts}__{stem}``.
+
+        The timestamp prefix keeps entries sortable by deletion time and —
+        combined with a microsecond component — collision-free in practice.
+        """
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        name = f"{ts}__{stem}"
+        while (self.trash_dir / name).exists():
+            ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+            name = f"{ts}__{stem}"
+        return name
+
+    def _write_trash_meta(self, trash_name: str, data: dict) -> None:
+        """Persist a JSON sidecar next to a trash entry.
+
+        The sidecar stores the original project/database names so entries can
+        be restored even when those names themselves contain the ``__``
+        separator that also appears in the entry name.
+        """
+        meta = {
+            "name": trash_name,
+            "deleted_at": datetime.now().isoformat(timespec="seconds"),
+            **data,
+        }
+        (self.trash_dir / f"{trash_name}.meta.json").write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+    def _read_trash_meta(self, trash_name: str) -> dict | None:
+        """Read a trash entry's sidecar metadata, or ``None`` if missing."""
+        meta_path = self.trash_dir / f"{trash_name}.meta.json"
+        if not meta_path.exists():
+            return None
+        try:
+            return json.loads(meta_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return None
+
+    def _delete_trash_meta(self, trash_name: str) -> None:
+        """Remove a trash entry's sidecar metadata."""
+        (self.trash_dir / f"{trash_name}.meta.json").unlink(missing_ok=True)
+
+    def _parse_trash_name(self, trash_name: str) -> dict | None:
+        """Fallback: derive type/project/database from the entry name.
+
+        Only used when a sidecar meta file is missing (e.g. after an
+        interrupted operation). The timestamp prefix is stripped via the first
+        ``__`` separator; the remainder is the original project/db name.
+        """
+        ts, sep, rest = trash_name.partition("__")
+        if not sep or not rest or not ts[:8].isdigit() or len(ts) < 23:
+            return None
+        if rest.endswith(".duckdb"):
+            database, sep2, project = rest[: -len(".duckdb")].rpartition("__")
+            if not sep2 or not project:
+                return None
+            return {"type": "database", "project": project, "database": database}
+        return {"type": "project", "project": rest}
+
+    def _trash_entry_size(self, path: Path) -> int:
+        """Total size in bytes of a trash entry (single file or directory)."""
+        if path.is_file():
+            return path.stat().st_size
+        return sum(p.stat().st_size for p in path.rglob("*") if p.is_file())
+
+    def trash_database(self, project: str, database: str) -> bool:
+        """Move a database file into the trash instead of deleting it.
+
+        The file is renamed into ``<data_dir>/trash/{ts}__{project}__{db}.duckdb``
+        under the exclusive per-file lock. Stored password credentials are not
+        touched here — the GUI removes them via ProjectAuth on delete.
+        """
+        db_path = self._get_db_path(project, database)
+        if not db_path.exists():
+            return False
+
+        lock = self._get_lock(str(db_path))
+        with lock.write():
+            trash_name = self._new_trash_name(f"{project}__{database}.duckdb")
+            dest = self.trash_dir / trash_name
+            self.trash_dir.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(db_path), str(dest))
+            self._write_trash_meta(
+                trash_name,
+                {"type": "database", "project": project, "database": database},
+            )
+        return True
+
+    def trash_project(self, project: str) -> bool:
+        """Move a whole project directory into the trash.
+
+        Acquires the locks of all contained databases first (like
+        delete_project) so a running query cannot collide with the move. The
+        project's ``.project.json`` is removed from the trashed copy so no
+        stored credentials survive a deleted project.
+        """
+        project_dir = self.data_dir / project
+        if not project_dir.exists():
+            return False
+
+        db_files = sorted(
+            p for p in project_dir.glob("*.duckdb") if p.is_file()
+        )
+        locks = [self._get_lock(str(p)) for p in db_files]
+        for lock in locks:
+            lock.acquire_write()
+        try:
+            trash_name = self._new_trash_name(project)
+            dest = self.trash_dir / trash_name
+            self.trash_dir.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(project_dir), str(dest))
+            # Never carry stored credentials into the trash.
+            (dest / ".project.json").unlink(missing_ok=True)
+            self._write_trash_meta(
+                trash_name, {"type": "project", "project": project}
+            )
+        finally:
+            for lock in reversed(locks):
+                lock.release_write()
+
+        order = self._load_project_order()
+        if project in order:
+            order.remove(project)
+            self._save_project_order(order)
+        return True
+
+    def list_trash(self) -> list[dict]:
+        """List all trash entries with their metadata.
+
+        Each entry dict contains ``name`` (trash entry name), ``type``
+        ('database' or 'project'), ``project``, ``database`` (databases only),
+        ``deleted_at`` (ISO timestamp) and ``size`` (bytes). Entries are sorted
+        by deletion time, newest first.
+        """
+        if not self.trash_dir.exists():
+            return []
+        entries = []
+        for name in sorted(os.listdir(self.trash_dir), reverse=True):
+            if name.startswith(".") or name.endswith(".meta.json"):
+                continue
+            path = self.trash_dir / name
+            meta = self._read_trash_meta(name) or self._parse_trash_name(name)
+            if meta is None:
+                continue
+            entries.append(
+                {
+                    "name": name,
+                    "type": meta.get("type", "database"),
+                    "project": meta.get("project", ""),
+                    "database": meta.get("database"),
+                    "deleted_at": meta.get("deleted_at", ""),
+                    "size": self._trash_entry_size(path),
+                }
+            )
+        return entries
+
+    def restore_database(self, trash_name: str, overwrite: bool = False) -> dict:
+        """Restore a trashed database into its original project.
+
+        If a database of the same name already exists and ``overwrite`` is
+        False, a ``conflict`` result is returned so the UI can ask the user.
+        With ``overwrite=True`` the existing live database is itself moved to
+        the trash before the trashed copy takes its place — nothing is ever
+        permanently deleted. A missing project directory is recreated and
+        added to the project order.
+        """
+        meta = self._read_trash_meta(trash_name) or self._parse_trash_name(trash_name)
+        if meta is None or meta.get("type") != "database":
+            return {"success": False, "error": "Trash entry not found"}
+        project = meta["project"]
+        database = meta["database"]
+
+        db_path = self._get_db_path(project, database)
+        if db_path.exists():
+            if not overwrite:
+                return {
+                    "success": False,
+                    "conflict": True,
+                    "type": "database",
+                    "project": project,
+                    "database": database,
+                }
+            # The existing live database takes a trip to the trash itself.
+            self.trash_database(project, database)
+
+        if not (self.data_dir / project).exists():
+            self.create_project(project)
+
+        lock = self._get_lock(str(db_path))
+        with lock.write():
+            shutil.move(str(self.trash_dir / trash_name), str(db_path))
+            self._delete_trash_meta(trash_name)
+        return {
+            "success": True,
+            "type": "database",
+            "project": project,
+            "database": database,
+        }
+
+    def restore_project(self, trash_name: str, overwrite: bool = False) -> dict:
+        """Restore a trashed project directory.
+
+        Same conflict/overwrite semantics as restore_database: an existing
+        live project is moved to the trash when ``overwrite`` is True. The
+        restored project is inserted at the top of the project order.
+        """
+        meta = self._read_trash_meta(trash_name) or self._parse_trash_name(trash_name)
+        if meta is None or meta.get("type") != "project":
+            return {"success": False, "error": "Trash entry not found"}
+        project = meta["project"]
+
+        project_dir = self.data_dir / project
+        if project_dir.exists():
+            if not overwrite:
+                return {
+                    "success": False,
+                    "conflict": True,
+                    "type": "project",
+                    "project": project,
+                }
+            self.trash_project(project)
+
+        db_files = sorted(
+            p
+            for p in (self.trash_dir / trash_name).glob("*.duckdb")
+            if p.is_file()
+        )
+        locks = [self._get_lock(str(p)) for p in db_files]
+        for lock in locks:
+            lock.acquire_write()
+        try:
+            shutil.move(str(self.trash_dir / trash_name), str(project_dir))
+            self._delete_trash_meta(trash_name)
+        finally:
+            for lock in reversed(locks):
+                lock.release_write()
+
+        self._add_project_to_order(project)
+        return {"success": True, "type": "project", "project": project}
+
+    def _add_project_to_order(self, project: str) -> None:
+        """Insert a project at the top of the order list (create_project style)."""
+        order = self._load_project_order()
+        if project in order:
+            order.remove(project)
+        order.insert(0, project)
+        self._save_project_order(order)
+
+    def empty_trash(self) -> int:
+        """Permanently delete all trash entries.
+
+        This is the destructive counterpart of the trash concept: entries are
+        removed for good (unlink / rmtree), reusing the permanent-delete
+        semantics of delete_database / delete_project. Returns the number of
+        entries removed.
+        """
+        if not self.trash_dir.exists():
+            return 0
+        count = 0
+        for entry in self.list_trash():
+            path = self.trash_dir / entry["name"]
+            db_files = (
+                sorted(p for p in path.glob("*.duckdb") if p.is_file())
+                if path.is_dir()
+                else []
+            )
+            locks = [self._get_lock(str(p)) for p in db_files]
+            for lock in locks:
+                lock.acquire_write()
+            try:
+                if path.is_dir():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink(missing_ok=True)
+                self._delete_trash_meta(entry["name"])
+            finally:
+                for lock in reversed(locks):
+                    lock.release_write()
+            count += 1
+        # Drop the (now empty) trash directory itself.
+        try:
+            self.trash_dir.rmdir()
+        except OSError:
+            pass
+        return count
 
     def execute_query(
         self,

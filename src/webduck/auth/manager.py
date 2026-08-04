@@ -259,3 +259,27 @@ class ProjectAuth:
         config = self.get_project_config(project)
         db_config = config.get("databases", {}).get(database, {})
         return bool(db_config.get("read_password_hash") or db_config.get("write_password_hash"))
+
+    def remove_database_password(self, project: str, database: str) -> bool:
+        """Remove all password hashes for a database.
+
+        Called when a database is deleted (moved to trash) so that no
+        credential for the deleted database survives in the project config.
+        Returns True if an entry was removed, False if the database had no
+        stored credentials (or the project config does not exist).
+        """
+        config = self.get_project_config(project)
+        databases = config.get("databases", {})
+        if database not in databases:
+            return False
+
+        del databases[database]
+        # Drop the whole config file once no databases remain — an empty
+        # .project.json is indistinguishable from a missing one.
+        if not databases:
+            self._get_project_config_path(project).unlink(missing_ok=True)
+        else:
+            config["databases"] = databases
+            with open(self._get_project_config_path(project), "w") as f:
+                json.dump(config, f, indent=2)
+        return True

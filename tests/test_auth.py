@@ -77,3 +77,24 @@ class TestProjectAuth:
 
     def test_nonexistent_project(self, project_auth):
         assert project_auth.has_database_access("nope", "nope", "pass", "read") is True
+
+    def test_remove_database_password(self, project_auth, tmp_data):
+        (tmp_data / "proj").mkdir()
+        project_auth.set_database_password("proj", "db1", "secret", "write")
+        assert project_auth.has_database_password("proj", "db1") is True
+        assert project_auth.remove_database_password("proj", "db1") is True
+        assert project_auth.has_database_password("proj", "db1") is False
+        # Config file is removed once no databases remain.
+        assert not (tmp_data / "proj" / ".project.json").exists()
+
+    def test_remove_database_password_keeps_other_entries(self, project_auth, tmp_data):
+        (tmp_data / "proj").mkdir()
+        project_auth.set_database_password("proj", "db1", "secret", "write")
+        project_auth.set_database_password("proj", "db2", "other", "read")
+        assert project_auth.remove_database_password("proj", "db1") is True
+        assert project_auth.has_database_password("proj", "db1") is False
+        assert project_auth.has_database_password("proj", "db2") is True
+
+    def test_remove_database_password_nonexistent(self, project_auth, tmp_data):
+        (tmp_data / "proj").mkdir()
+        assert project_auth.remove_database_password("proj", "nope") is False

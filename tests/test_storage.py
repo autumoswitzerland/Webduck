@@ -309,3 +309,124 @@ class TestStorageEngine:
         frag = storage.fragmentation("p", "db")
         assert frag is not None
         assert frag >= 0.3
+
+
+class TestTrash:
+    def test_trash_and_restore_database(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        storage.execute_query(
+            "p", "db",
+            "CREATE TABLE t (id INTEGER); INSERT INTO t VALUES (1)",
+            read_only=False,
+        )
+        assert storage.trash_database("p", "db") is True
+        assert storage.database_exists("p", "db") is False
+
+        entries = storage.list_trash()
+        assert len(entries) == 1
+        assert entries[0]["type"] == "database"
+        assert entries[0]["project"] == "p"
+        assert entries[0]["database"] == "db"
+
+        result = storage.restore_database(entries[0]["name"])
+        assert result["success"] is True
+        assert storage.database_exists("p", "db") is True
+        # Data survived the round trip.
+        query = storage.execute_query("p", "db", "SELECT id FROM t")
+        assert query["rows"] == [[1]]
+        assert storage.list_trash() == []
+
+    def test_trash_and_restore_project(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        storage.create_project("q")
+        assert storage.trash_project("p") is True
+        assert storage.list_projects() == ["q"]
+
+        entries = storage.list_trash()
+        assert len(entries) == 1
+        assert entries[0]["type"] == "project"
+
+        result = storage.restore_project(entries[0]["name"])
+        assert result["success"] is True
+        assert storage.database_exists("p", "db") is True
+        # Restored projects land at the top of the order.
+        assert storage.list_projects() == ["p", "q"]
+
+    def test_trash_project_strips_credentials(self, storage, project_auth, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        project_auth.set_database_password("p", "db", "secret", "write")
+        assert storage.trash_project("p") is True
+        # The trashed copy must not carry any stored credentials.
+        entries = storage.list_trash()
+        trash_proj = storage.trash_dir / entries[0]["name"]
+        assert not (trash_proj / ".project.json").exists()
+
+    def test_trash_restore_conflict(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        storage.execute_query(
+            "p", "db",
+            "CREATE TABLE t (id INTEGER); INSERT INTO t VALUES (1)",
+            read_only=False,
+        )
+        assert storage.trash_database("p", "db") is True
+        storage.create_database("p", "db")
+        storage.execute_query(
+            "p", "db",
+            "CREATE TABLE t (id INTEGER); INSERT INTO t VALUES (2)",
+            read_only=False,
+        )
+
+        entries = storage.list_trash()
+        result = storage.restore_database(entries[0]["name"])
+        assert result["success"] is False
+        assert result["conflict"] is True
+
+        # Overwrite: the live database moves to the trash, the trashed copy
+        # takes its place — nothing is permanently deleted.
+        result = storage.restore_database(entries[0]["name"], overwrite=True)
+        assert result["success"] is True
+        query = storage.execute_query("p", "db", "SELECT id FROM t")
+        assert query["rows"] == [[1]]
+
+        trash = storage.list_trash()
+        assert len(trash) == 1
+        assert trash[0]["database"] == "db"
+
+    def test_empty_trash(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        storage.create_project("q")
+        storage.create_database("q", "db2")
+        storage.trash_database("p", "db")
+        storage.trash_project("q")
+        assert len(storage.list_trash()) == 2
+        assert storage.empty_trash() == 2
+        assert storage.list_trash() == []
+        assert not storage.trash_dir.exists()
+
+    def test_trash_database_recreates_missing_project(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        assert storage.trash_database("p", "db") is True
+        # The project disappears entirely afterwards (edge case).
+        import shutil
+        shutil.rmtree(tmp_data / "p")
+
+        entries = storage.list_trash()
+        result = storage.restore_database(entries[0]["name"])
+        assert result["success"] is True
+        assert storage.database_exists("p", "db") is True
+        assert "p" in storage.list_projects()
+
+    def test_trash_dir_not_listed_as_project(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        storage.trash_database("p", "db")
+        assert storage.list_projects() == ["p"]
+
+    def test_create_project_trash_name_blocked(self, storage, tmp_data):
+        assert storage.create_project("trash") is False

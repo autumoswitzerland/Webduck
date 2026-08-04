@@ -523,6 +523,7 @@ def main():
         from webduck.pages import login as login_page
         from webduck.pages import projects as projects_page
         from webduck.pages import query as query_page
+        from webduck.pages import trash as trash_page
 
         login_page.register()
         dashboard_page.register()
@@ -530,6 +531,7 @@ def main():
         query_page.register()
         browse_page.register()
         import_export_page.register()
+        trash_page.register()
 
         # --- Favicon ---
         # SVG favicons are inlined as data-URLs; other formats are passed

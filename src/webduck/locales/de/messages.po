@@ -88,7 +88,7 @@ msgid "delete_project"
 msgstr "Projekt löschen"
 
 msgid "confirm_delete_project"
-msgstr "Möchten Sie dieses Projekt wirklich löschen?"
+msgstr "Möchten Sie dieses Projekt wirklich in den Papierkorb verschieben?"
 
 # Databases
 msgid "databases_title"
@@ -119,7 +119,7 @@ msgid "delete_database"
 msgstr "Datenbank löschen"
 
 msgid "confirm_delete_database"
-msgstr "Möchten Sie diese Datenbank wirklich löschen?"
+msgstr "Möchten Sie diese Datenbank wirklich in den Papierkorb verschieben?"
 
 msgid "compress"
 msgstr "Kompaktieren"
@@ -404,3 +404,49 @@ msgstr "Format"
 
 msgid "import_hint"
 msgstr "Unterstützte Formate: CSV, Parquet, JSON (automatische Erkennung anhand der Dateiendung). Maximale Dateigrösse: {0} MB."
+
+# Trash
+msgid "trash"
+msgstr "Papierkorb"
+
+msgid "trash_title"
+msgstr "Papierkorb"
+
+msgid "project"
+msgstr "Projekt"
+
+msgid "empty_trash"
+msgstr "Papierkorb leeren"
+
+msgid "confirm_empty_trash"
+msgstr "Sind Sie sicher, dass Sie den Papierkorb endgültig leeren möchten? Alle gelöschten Datenbanken und Projekte werden unwiderruflich entfernt. Dies kann nicht rückgängig gemacht werden."
+
+msgid "trash_empty"
+msgstr "Der Papierkorb ist leer."
+
+msgid "trash_emptied"
+msgstr "Papierkorb geleert ({0} Einträge entfernt)."
+
+msgid "moved_to_trash"
+msgstr "In den Papierkorb verschoben."
+
+msgid "restore"
+msgstr "Wiederherstellen"
+
+msgid "restore_success"
+msgstr "Erfolgreich wiederhergestellt."
+
+msgid "restore_conflict_db"
+msgstr "Datenbank '{0}' existiert bereits in Projekt '{1}'."
+
+msgid "restore_conflict_project"
+msgstr "Projekt '{0}' existiert bereits."
+
+msgid "restore_conflict_hint"
+msgstr "Bei 'Weiter' wird das bestehende Objekt in den Papierkorb verschoben und durch die wiederhergestellte Version ersetzt."
+
+msgid "overwrite"
+msgstr "Weiter"
+
+msgid "deleted_at"
+msgstr "Gelöscht am"

@@ -88,7 +88,7 @@ msgid "delete_project"
 msgstr "Delete Project"
 
 msgid "confirm_delete_project"
-msgstr "Are you sure you want to delete this project?"
+msgstr "Are you sure you want to move this project to the trash?"
 
 # Databases
 msgid "databases_title"
@@ -119,7 +119,7 @@ msgid "delete_database"
 msgstr "Delete Database"
 
 msgid "confirm_delete_database"
-msgstr "Are you sure you want to delete this database?"
+msgstr "Are you sure you want to move this database to the trash?"
 
 msgid "compress"
 msgstr "Compress"
@@ -404,3 +404,49 @@ msgstr "Format"
 
 msgid "import_hint"
 msgstr "Supported formats: CSV, Parquet, JSON (auto-detected by file extension). Max file size: {0} MB."
+
+# Trash
+msgid "trash"
+msgstr "Trash"
+
+msgid "trash_title"
+msgstr "Trash"
+
+msgid "project"
+msgstr "Project"
+
+msgid "empty_trash"
+msgstr "Empty trash"
+
+msgid "confirm_empty_trash"
+msgstr "Are you sure you want to permanently empty the trash? All deleted databases and projects will be removed for good. This cannot be undone."
+
+msgid "trash_empty"
+msgstr "The trash is empty."
+
+msgid "trash_emptied"
+msgstr "Trash emptied ({0} entries removed)."
+
+msgid "moved_to_trash"
+msgstr "Moved to trash."
+
+msgid "restore"
+msgstr "Restore"
+
+msgid "restore_success"
+msgstr "Restored successfully."
+
+msgid "restore_conflict_db"
+msgstr "Database '{0}' already exists in project '{1}'."
+
+msgid "restore_conflict_project"
+msgstr "Project '{0}' already exists."
+
+msgid "restore_conflict_hint"
+msgstr "If you continue, the existing object will be moved to the trash and replaced by the restored version."
+
+msgid "overwrite"
+msgstr "Continue"
+
+msgid "deleted_at"
+msgstr "Deleted at"

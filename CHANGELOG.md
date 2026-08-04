@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.4.0] - 2026-08-02
 
 ### Added
+- Trash (soft delete): deleting a database or project from the web UI no
+  longer removes it for good — the item is moved to a trash directory
+  (`<data_dir>/trash/`) and can be restored from a new dedicated Trash page
+  (drawer entry "Trash"). Restoring into an occupied name asks the user and,
+  on "Continue", moves the existing live object into the trash itself so
+  nothing is ever permanently deleted. Missing parent projects are recreated
+  automatically. Emptying the trash is destructive and guarded by a
+  confirmation dialog. Deleting a database also removes its stored API
+  password, so a restored database starts without credentials and the admin
+  must set a new password. The REST API (`/db/*`, `/admin/*`) is unchanged —
+  REST deletes remain permanent.
 - Database compression ("compact") in the Web UI: each database can be
   compacted via a dedicated button, reclaiming space DuckDB leaves behind
   after updates/deletes. Handles foreign keys correctly by copying tables in
@@ -23,6 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Database size display in the projects view: the file size is shown next to
   each database name, formatted with decimal units so it matches file
   managers like the macOS Finder and Windows Explorer.
+
+### Fixed
+- Success toasts on the projects and trash pages were wiped by the
+  immediate page reload after the action (create/delete project or database,
+  set password, restore, empty trash) and were never visible. The message is
+  now queued in the user session and shown once after the reloaded page has
+  rendered.
 - Compress recommendation: the compress icon next to a database lights up
   amber when fragmentation (free/total blocks) reaches 20 % in databases of
   at least 10 MB, with a tooltip hinting that compression is recommended; the

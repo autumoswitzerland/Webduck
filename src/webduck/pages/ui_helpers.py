@@ -107,6 +107,7 @@ def make_drawer(_):
             (_("browse"), "/browse", "account_tree"),
             (_("sql_editor"), "/query", "code"),
             (_("import_export"), "/import", "upload_file"),
+            (_("trash"), "/trash", "delete_sweep"),
         ]:
             with ui.item(
                 on_click=lambda t=target: ui.navigate.to(t)
