@@ -183,6 +183,7 @@ async def execute_query(
         log_error("execute_query: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
+    storage_engine.record_db_access()
     result = await asyncio.to_thread(
         storage_engine.execute_query,
         project,
@@ -229,6 +230,7 @@ async def execute_write(
             detail="Write access denied",
         )
 
+    storage_engine.record_db_access()
     result = await asyncio.to_thread(
         storage_engine.execute_query,
         project,
@@ -259,6 +261,7 @@ async def list_tables(
         log_error("list_tables: Storage engine not initialized")
         raise HTTPException(status_code=500, detail="Storage engine not initialized")
 
+    storage_engine.record_db_access()
     result = await asyncio.to_thread(storage_engine.get_table_info, project, database)
     return result
 
@@ -330,6 +333,7 @@ async def import_file(
             detail="Write access denied",
         )
 
+    storage_engine.record_db_access()
     # Path is wrapped in a Path object by the engine for safe resolution.
     # DuckDB's read functions handle the actual file I/O.
     result = await asyncio.to_thread(
@@ -390,6 +394,7 @@ async def export_file(
             detail="Write access denied",
         )
 
+    storage_engine.record_db_access()
     result = await asyncio.to_thread(
         storage_engine.export_data, project, database, table_name, Path(path), fmt=format
     )

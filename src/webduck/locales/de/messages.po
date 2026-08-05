@@ -71,6 +71,27 @@ msgstr "Datenbanken gesamt"
 msgid "server_status"
 msgstr "Serverstatus"
 
+msgid "traffic_monitor"
+msgstr "Traffic-Monitor"
+
+msgid "queries_per_min"
+msgstr "Abfragen/min"
+
+msgid "websocket_connections"
+msgstr "WebSocket-Verbindungen"
+
+msgid "storage_overview"
+msgstr "Speicher-Übersicht"
+
+msgid "size"
+msgstr "Größe"
+
+msgid "total"
+msgstr "Gesamt"
+
+msgid "objects"
+msgstr "Objekte"
+
 # Projects
 msgid "projects_title"
 msgstr "Projekte"

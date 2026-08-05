@@ -31,7 +31,9 @@ import json
 import os
 import shutil
 import threading
+import time
 import weakref
+from collections import deque
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
@@ -160,6 +162,46 @@ class StorageEngine:
             weakref.WeakValueDictionary()
         )
         self._locks_lock = threading.Lock()
+
+        # In-memory REST-API traffic counter: a rolling window of DB access
+        # timestamps. Only the REST layer (api/db.py) calls record_db_access(),
+        # so GUI traffic is never counted here. Pure memory — nothing is
+        # persisted and no database is opened.
+        self._db_access_events: deque[float] = deque()
+        self._traffic_lock = threading.Lock()
+
+    def record_db_access(self) -> None:
+        """Record a database access (REST API only, in-memory).
+
+        Appends the current monotonic timestamp to the rolling window and
+        prunes entries older than the 60-second window.
+        """
+        now = time.monotonic()
+        with self._traffic_lock:
+            self._db_access_events.append(now)
+            while self._db_access_events and now - self._db_access_events[0] > 60.0:
+                self._db_access_events.popleft()
+
+    def db_access_series(
+        self, window_seconds: int = 60, bucket_seconds: float = 2.0
+    ) -> list[int]:
+        """Return the DB-access counts per bucket over the rolling window.
+
+        Buckets cover the last ``window_seconds``, each ``bucket_seconds``
+        wide, ordered oldest first. The sum of all buckets equals the number
+        of accesses in the last ``window_seconds`` (e.g. queries per minute
+        for the default 60s window).
+        """
+        now = time.monotonic()
+        with self._traffic_lock:
+            events = list(self._db_access_events)
+
+        buckets = [0] * int(window_seconds / bucket_seconds)
+        for ts in events:
+            idx = int((ts - (now - window_seconds)) // bucket_seconds)
+            if 0 <= idx < len(buckets):
+                buckets[idx] += 1
+        return buckets
 
     def _get_lock(self, db_path: str) -> _DBLock:
         """Get or create the lock wrapper for a specific database file."""
@@ -746,6 +788,56 @@ class StorageEngine:
             else:
                 entry["databases"] = []
             entries.append(entry)
+        return entries
+
+    def list_trash_objects(self) -> list[dict]:
+        """List all trash entries with their metadata.
+
+        Each entry dict contains ``name`` (trash entry name), ``type``
+        ('database' or 'project'), ``project``, ``database`` (databases only),
+        ``deleted_at`` (ISO timestamp) and ``size`` (bytes). Entries are sorted
+        by deletion time, newest first.
+        """
+        if not self.trash_dir.exists():
+            return []
+
+        entries = []
+
+        for name in sorted(os.listdir(self.trash_dir), reverse=True):
+            if name.startswith(".") or name.endswith(".meta.json"):
+                continue
+
+            path = self.trash_dir / name
+            meta = self._read_trash_meta(name) or self._parse_trash_name(name)
+
+            if meta is None:
+                continue
+
+            entry = {
+                "name": name,
+                "type": meta.get("type", "database"),
+                "project": meta.get("project", ""),
+                "database": meta.get("database"),
+                "deleted_at": meta.get("deleted_at", ""),
+                "size": self._trash_entry_size(path),
+            }
+
+            # Keep the original project/database entry.
+            entries.append(entry)
+
+            # Expand project contents into individual database entries.
+            if path.is_dir():
+                for db_file in sorted(path.glob("*.duckdb")):
+                    if db_file.is_file():
+                        entries.append({
+                            "name": db_file.name,
+                            "type": "database",
+                            "project": meta.get("project", ""),
+                            "database": db_file.stem,
+                            "deleted_at": meta.get("deleted_at", ""),
+                            "size": self._trash_entry_size(db_file),
+                        })
+
         return entries
 
     def restore_database(self, trash_name: str, overwrite: bool = False) -> dict:

@@ -162,3 +162,47 @@ class TestPublicEndpoints:
         resp = fastapi_client.get("/db/projects/p1/databases")
         assert resp.status_code == 200
         assert "d1" in resp.json()
+
+
+class TestTrafficMonitoring:
+    def test_db_accesses_count_traffic(self, fastapi_client, setup_db, shared_storage):
+        h = setup_db
+        before = sum(shared_storage.db_access_series(60, 2))
+        # query + write + tables all touch the database file.
+        fastapi_client.post(
+            "/db/projects/myproj/databases/db1/write",
+            json={"sql": "CREATE TABLE t (id INTEGER)"},
+            headers=h,
+        )
+        fastapi_client.post(
+            "/db/projects/myproj/databases/db1/query",
+            json={"sql": "SELECT 1"},
+            headers=h,
+        )
+        fastapi_client.get(
+            "/db/projects/myproj/databases/db1/tables",
+            headers=h,
+        )
+        after = sum(shared_storage.db_access_series(60, 2))
+        assert after - before == 3
+
+    def test_metadata_endpoints_not_counted(self, fastapi_client, auth_token, shared_storage):
+        h = {"Authorization": f"Bearer {auth_token}"}
+        fastapi_client.post("/admin/projects", json={"name": "p1"}, headers=h)
+        before = sum(shared_storage.db_access_series(60, 2))
+        fastapi_client.get("/db/projects")
+        fastapi_client.get("/db/projects/p1/databases")
+        after = sum(shared_storage.db_access_series(60, 2))
+        assert after == before
+
+    def test_unauthorized_access_not_counted(self, fastapi_client, setup_db, shared_storage):
+        # Wrong password: request must be rejected and never counted.
+        before = sum(shared_storage.db_access_series(60, 2))
+        resp = fastapi_client.post(
+            "/db/projects/myproj/databases/db1/query",
+            json={"sql": "SELECT 1"},
+            headers={"X-Project-Key": "myproj:wrong"},
+        )
+        assert resp.status_code == 401
+        after = sum(shared_storage.db_access_series(60, 2))
+        assert after == before

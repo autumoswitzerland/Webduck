@@ -448,3 +448,40 @@ class TestTrash:
 
     def test_create_project_trash_name_blocked(self, storage, tmp_data):
         assert storage.create_project("trash") is False
+
+
+class TestTrafficCounter:
+    def test_record_increments_series(self, storage):
+        assert storage.db_access_series(60, 2) == [0] * 30
+        storage.record_db_access()
+        storage.record_db_access()
+        series = storage.db_access_series(60, 2)
+        assert sum(series) == 2
+        assert all(v >= 0 for v in series)
+
+    def test_bucket_distribution(self, storage):
+        storage.record_db_access()
+        series = storage.db_access_series(60, 2)
+        assert series[-1] == 1
+        assert sum(series[:-1]) == 0
+
+    def test_old_events_pruned(self, storage):
+        import time
+
+        with storage._traffic_lock:
+            storage._db_access_events.clear()
+            storage._db_access_events.append(time.monotonic() - 65.0)
+        # Access older than the window must not be counted.
+        assert storage.db_access_series(60, 2) == [0] * 30
+        # record_db_access prunes stale entries from the deque.
+        storage.record_db_access()
+        with storage._traffic_lock:
+            assert len(storage._db_access_events) == 1
+
+    def test_gui_traffic_not_counted(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        # GUI-style engine use never calls record_db_access().
+        result = storage.execute_query("p", "db", "SELECT 1")
+        assert result["success"] is True
+        assert storage.db_access_series(60, 2) == [0] * 30
