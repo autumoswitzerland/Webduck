@@ -130,11 +130,17 @@ msgstr "optional"
 msgid "generate_password"
 msgstr "Generate Password"
 
-msgid "password_set"
-msgstr "Password set"
-
 msgid "change_password"
 msgstr "Change Password"
+
+msgid "remove_password"
+msgstr "Remove password"
+
+msgid "confirm_remove_password"
+msgstr "Remove the API password for database '{0}'? API access will be open afterwards."
+
+msgid "password_removed"
+msgstr "Password removed."
 
 msgid "delete_database"
 msgstr "Delete Database"

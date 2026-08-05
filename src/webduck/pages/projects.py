@@ -329,22 +329,84 @@ def register():
                                                 "font-size: 0.75em;"
                                             )
                                         # Show a lock icon if this database has an API password set.
+                                        # Left-click opens a menu with the option to remove the
+                                        # password again (backed by a security confirmation).
                                         _pa = ctx.project_auth or ProjectAuth(ctx.storage.data_dir)
                                         has_pw = _pa.has_database_password(
                                             project, db_name
                                         )
                                         if has_pw:
-                                            ui.html(
-                                                '<svg width="14" height="14" viewBox="0 0 24 24" '
-                                                'fill="none" stroke="#FFD54F" stroke-width="2" '
-                                                'stroke-linecap="round" stroke-linejoin="round" '
-                                                'style="vertical-align: middle;">'
-                                                '<rect x="3" y="11" width="18" height="11" '
-                                                'rx="2" ry="2"/>'
-                                                '<path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
-                                            ).tooltip(_("password_set")).props(
-                                                "tooltip-position=top"
-                                            )
+                                            async def remove_pw_confirm(
+                                                p=project, d=db_name
+                                            ):
+                                                with ui.dialog() as dlg, ui.card().classes(
+                                                    "items-center gap-4"
+                                                ).style(
+                                                    "background: #1E1E1E; border-radius: 12px; "
+                                                    "padding: 24px 32px;"
+                                                ):
+                                                    ui.label(
+                                                        _("confirm_remove_password").format(d)
+                                                    ).style(f"color: {TEXT_SOFT}")
+                                                    with ui.row().classes("gap-2"):
+                                                        ui.button(
+                                                            _("cancel"),
+                                                            on_click=dlg.close,
+                                                        ).props("outline color=grey").classes(
+                                                            "border-button"
+                                                        )
+
+                                                        def do_remove():
+                                                            dlg.close()
+                                                            pa = (
+                                                                ctx.project_auth
+                                                                or ProjectAuth(
+                                                                    ctx.storage.data_dir
+                                                                )
+                                                            )
+                                                            if pa.remove_database_password(p, d):
+                                                                nicegui_app.storage.user["flash"] = _(
+                                                                    "password_removed"
+                                                                )
+                                                                ui.navigate.reload()
+                                                            else:
+                                                                ui.notify(
+                                                                    _("error"),
+                                                                    type="negative",
+                                                                )
+
+                                                        ui.button(
+                                                            _("remove_password"),
+                                                            on_click=do_remove,
+                                                        ).props("outline color=red").classes(
+                                                            "border-button"
+                                                        )
+                                                dlg.open()
+
+                                            with ui.element("div"):
+                                                ui.html(
+                                                    '<svg width="14" height="14" '
+                                                    'viewBox="0 0 24 24" fill="none" '
+                                                    'stroke="#FFD54F" stroke-width="2" '
+                                                    'stroke-linecap="round" stroke-linejoin="round" '
+                                                    'style="vertical-align: middle;">'
+                                                    '<rect x="3" y="11" width="18" height="11" '
+                                                    'rx="2" ry="2"/>'
+                                                    '<path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+                                                )
+                                                with ui.menu():
+                                                    ui.menu_item(
+                                                        _("change_password"),
+                                                        on_click=lambda p=project, d=db_name: (
+                                                            change_db_password(p, d)
+                                                        ),
+                                                    )
+                                                    ui.menu_item(
+                                                        _("remove_password"),
+                                                        on_click=lambda p=project, d=db_name: (
+                                                            remove_pw_confirm(p, d)
+                                                        ),
+                                                    ).style("color: #F44336;")
                                         ui.space()
 
                                         # Password change dialog: generate or set a new API password.

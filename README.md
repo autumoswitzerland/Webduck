@@ -42,6 +42,9 @@
 
 <table>
 <tr>
+<td colspan="2" align="center"><strong>Dashboard</strong><br><a href="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/screen_dashboard.webp"><img src="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/screen_dashboard.webp" width="700"></a></td>
+</tr>
+<tr>
 <td align="center"><strong>Projects</strong><br><a href="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/screen_projects.webp"><img src="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/screen_projects.webp" width="450"></a></td>
 <td align="center"><strong>Browse View</strong><br><a href="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/screen_browse.webp"><img src="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/screen_browse.webp" width="450"></a></td>
 </tr>
