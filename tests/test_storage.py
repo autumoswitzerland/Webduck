@@ -363,7 +363,11 @@ class TestTrash:
         entries = storage.list_trash()
         assert len(entries) == 1
         assert entries[0]["type"] == "project"
-        assert entries[0]["databases"] == ["db1", "db2"]
+        assert [d["name"] for d in entries[0]["databases"]] == ["db1", "db2"]
+        assert all(
+            isinstance(d["size"], int) and d["size"] > 0
+            for d in entries[0]["databases"]
+        )
 
         # Database trash entries carry an empty list.
         storage.create_project("q")

@@ -77,8 +77,8 @@ msgstr "Traffic Monitor"
 msgid "queries_per_min"
 msgstr "Queries/min"
 
-msgid "websocket_connections"
-msgstr "WebSocket Connections"
+msgid "active_sessions"
+msgstr "Active Sessions"
 
 msgid "storage_overview"
 msgstr "Storage Overview"

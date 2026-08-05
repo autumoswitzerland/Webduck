@@ -51,10 +51,6 @@ TOP_CARD_CLASSES = (
     "w-full "
     "flex flex-col justify-center items-center"
 )
-STORAGE_BOTTOM_ROW = (
-    "padding: 12px 16px; "
-    "line-height: 1.4; "
-)
 
 def _fmt_bytes(num: int) -> str:
     """Format a byte count as a human-readable string (decimal units)."""
@@ -72,6 +68,35 @@ def _ws_count() -> int:
         return sum(1 for _ in nicegui_app.clients())
     except Exception:
         return 0
+
+
+def _storage_footer_lines(
+    has_rows: bool,
+    total_dbs: int,
+    total_size: int,
+    trash_objects: int,
+    trash_size: int,
+    translate,
+) -> list[str]:
+    """Return the storage footer lines to display.
+
+    The total line is only shown when the table has rows; the trash line
+    only when there is something in the trash.
+    """
+    lines = []
+    if has_rows:
+        lines.append(
+            f'<strong><span style="display: inline-block; width: 40px;">'
+            f'{translate("total")}</span></strong>: {total_dbs} '
+            f'{translate("databases")}, {_fmt_bytes(total_size)}'
+        )
+    if trash_objects > 0:
+        lines.append(
+            f'<strong><span style="display: inline-block; width: 40px;">'
+            f'{translate("trash")}</span></strong>: {trash_objects} '
+            f'{translate("objects")}, {_fmt_bytes(trash_size)}'
+        )
+    return lines
 
 
 def _traffic_labels(bucket_seconds: float = 2.0) -> list[str]:
@@ -100,18 +125,20 @@ def register():
         make_footer(_)
 
         # Load trash stats (count + total size), clickable -> /trash.
+        # One hierarchical list: count = projects + contained databases,
+        # size = top-level sizes only (no double counting).
         try:
             trash_entries = ctx.storage.list_trash()
+            trash_objects = sum(
+                1 + len(e.get("databases") or []) for e in trash_entries
+            )
             trash_size = sum(
                 e.get("size") or 0 for e in trash_entries
             )
 
-            trash_objects = ctx.storage.list_trash_objects()
-
         except Exception:
-            trash_entries = []
+            trash_objects = 0
             trash_size = 0
-            trash_objects = []
 
         # -- Page title card
         with ui.card().classes("w-full"):
@@ -168,7 +195,7 @@ def register():
                     "click", lambda: ui.navigate.to("/trash")
                 ):
                     with ui.column().classes("items-center justify-center"):
-                        ui.label(str(len(trash_objects))).classes(
+                        ui.label(str(trash_objects)).classes(
                             "text-h3"
                         ).style(f"color: {YELLOW_LIGHT}")
                         ui.label(_("trash")).classes("text-h6")
@@ -190,7 +217,7 @@ def register():
                     ws_label = ui.label(str(_ws_count())).classes(
                         "text-h3"
                     ).style(f"color: {YELLOW_LIGHT}")
-                    ui.label(_("websocket_connections")).classes("text-h6")
+                    ui.label(_("active_sessions")).classes("text-h6")
 
             # Grafana-style live line chart: accesses per 2s over 60s.
             bucket_seconds = 2.0
@@ -325,26 +352,17 @@ def register():
 
             table.on("rowClick", lambda e: ui.navigate.to("/projects"))
 
-            # Sum footer row via Quasar's bottom-row slot.
-            with table.add_slot("bottom-row"):
-                with ui.element("div").style(STORAGE_BOTTOM_ROW):
-                    total_line = (
-                        f'<strong><span style="display: inline-block; width: 40px;">'
-                        f'{_("total")}</span></strong>: {total_dbs} {_("databases")}, '
-                        f'{_fmt_bytes(total_size)}'
-                    )
-                    trash_line = (
-                        f'<strong><span style="display: inline-block; width: 40px;">'
-                        f'{_("trash")}</span></strong>: {str(len(trash_objects))} '
-                        f'{_("objects")}, {_fmt_bytes(trash_size)}'
-                    )
-                    ui.html(
-                        f"""
-                        <div>
-                            {total_line}
-                        </div>
-                        <div>
-                            {trash_line}
-                        </div>
-                        """
-                    )
+            footer_lines = _storage_footer_lines(
+                bool(rows),
+                total_dbs,
+                total_size,
+                trash_objects,
+                trash_size,
+                _,
+            )
+            if footer_lines:
+                with ui.element("div").classes("w-full q-mt-sm").style(
+                    f"color: {TEXT_DIM};"
+                ):
+                    separator = '<span style="margin: 0 10px;">&bull;</span>'
+                    ui.html(separator.join(footer_lines))
