@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Database size display in the projects view: the file size is shown next to
   each database name, formatted with decimal units so it matches file
   managers like the macOS Finder and Windows Explorer.
+- Dashboard landing page: four stat cards (server online, projects, databases,
+  trash with object count), a live traffic monitor showing REST API database
+  accesses per minute (rolling 60-second window) plus active UI sessions, and
+  a storage overview table with per-project sizes and a trash line. The
+  traffic counter only counts authenticated database API calls (query, write,
+  tables, import, export) — GUI, admin and metadata endpoints are excluded.
 
 ### Fixed
 - Success toasts on the projects and trash pages were wiped by the

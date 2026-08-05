@@ -22,6 +22,7 @@
 - **DuckDB storage engine** with file-locking for safe concurrent access
 - **REST API** — admin endpoints (project/DB management) + database endpoints (SQL queries)
 - **Web UI** (NiceGUI) — dark mode with yellow/amber theme
+- **Dashboard** — server status cards, live REST traffic monitor (queries/min, active sessions), storage overview with per-project sizes and trash totals
 - **JWT authentication** for admin API, optional project-key auth for database access
 - **bcrypt password hashing** (never plaintext)
 - **SQL editor** — multi-statement support with sequential execution, query history (Alt+Up/Alt+Down, Alt+Enter)
@@ -132,11 +133,12 @@ server:
 | Page | URL | Description |
 |------|-----|-------------|
 | Login | `/ui/login` | Admin login with language selection |
-| Dashboard | `/ui/dashboard` | Server status, project/database overview |
+| Dashboard | `/ui/dashboard` | Server status, live traffic monitor (queries/min, active sessions), storage overview |
 | Projects | `/ui/projects` | Create/delete projects, manage databases, set passwords, drag & drop reorder, database sizes + compression hint |
 | Queries | `/ui/query` | SQL editor (multi-statement) + SQL file upload, query history (Alt+Up/Alt+Down) |
 | Browse | `/ui/browse` | Tree navigation, table/view browsing with infinite scroll, cell editing |
 | Import/Export | `/ui/import` | CSV, Parquet and JSON import (drag & drop) and export (browser download) |
+| Trash | `/ui/trash` | Restore soft-deleted projects/databases, empty the trash |
 
 ## REST API Reference
 
@@ -180,7 +182,7 @@ Databases without a password set are publicly accessible.
 # Login
 TOKEN=$(curl -s -X POST http://localhost:8998/admin/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"secret"}' | jq -r '.access_token')
+  -d '{"username":"admin","password":"secret"}' | jq -r '.token')
 
 # Create project + database
 curl -X POST http://localhost:8998/admin/projects \
@@ -191,24 +193,23 @@ curl -X POST http://localhost:8998/admin/projects/myapp/databases \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"name":"main"}'
 
+# Execute a query via the Database API (no password yet = open)
+curl -X POST http://localhost:8998/db/projects/myapp/databases/main/write \
+  -H "Content-Type: application/json" \
+  -d '{"sql":"CREATE TABLE users (id INT, name VARCHAR); INSERT INTO users VALUES (1, '\''Alice'\'');"}'
+
+# Read (without password — no header needed)
+curl -X POST http://localhost:8998/db/projects/myapp/databases/main/query \
+  -d '{"sql":"SELECT * FROM users"}'
+
 # Set database password (optional — without password, API is open)
 curl -X PUT http://localhost:8998/admin/projects/myapp/databases/main/password \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"password":"dbpass","access_level":"write"}'
 
-# Execute a query via the Database API
-curl -X POST http://localhost:8998/db/projects/myapp/databases/main/write \
-  -H "X-Project-Key: myapp:dbpass" \
-  -H "Content-Type: application/json" \
-  -d '{"sql":"CREATE TABLE users (id INT, name VARCHAR); INSERT INTO users VALUES (1, '\''Alice'\'');"}'
-
 # Read (with password)
 curl -X POST http://localhost:8998/db/projects/myapp/databases/main/query \
   -H "X-Project-Key: myapp:dbpass" \
-  -d '{"sql":"SELECT * FROM users"}'
-
-# Read (without password — no header needed)
-curl -X POST http://localhost:8998/db/projects/myapp/databases/main/query \
   -d '{"sql":"SELECT * FROM users"}'
 ```
 
