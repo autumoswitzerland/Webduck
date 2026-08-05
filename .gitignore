@@ -29,9 +29,13 @@ env/
 # IDE
 .vscode/
 .idea/
+*.iml
 *.swp
 *.swo
 *~
+.project
+.pydevproject
+.settings/
 
 # Testing
 .pytest_cache/
