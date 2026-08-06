@@ -301,6 +301,9 @@ msgstr "Navigation"
 msgid "online"
 msgstr "Online"
 
+msgid "offline"
+msgstr "Offline"
+
 msgid "no_projects_found"
 msgstr "No projects found"
 

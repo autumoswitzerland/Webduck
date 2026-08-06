@@ -87,14 +87,14 @@ def _storage_footer_lines(
     lines = []
     if has_rows:
         lines.append(
-            f'<strong><span style="display: inline-block; width: 40px;">'
-            f'{translate("total")}</span></strong>: {total_dbs} '
+            f'<strong>'
+            f'{translate("total")}</strong>: {total_dbs} '
             f'{translate("databases")}, {_fmt_bytes(total_size)}'
         )
     if trash_objects > 0:
         lines.append(
-            f'<strong><span style="display: inline-block; width: 40px;">'
-            f'{translate("trash")}</span></strong>: {trash_objects} '
+            f'<strong>'
+            f'{translate("trash")}</strong>: {trash_objects} '
             f'{translate("objects")}, {_fmt_bytes(trash_size)}'
         )
     return lines
@@ -163,12 +163,16 @@ def register():
             with ui.element("div").classes(
                 "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full"
             ):
-                # Card 1: Server status — always shows "Online" if the page loaded.
+                # Card 1: Server status — reflects the live socket connection.
+                # Turns "Offline" (red) when the server stops, back to
+                # "Online" (green) on reconnect. See the JS listener below.
                 with ui.card().classes(TOP_CARD_CLASSES).style(TOP_CARD_STYLE):
                     with ui.column().classes("items-center justify-center"):
                         ui.badge(
                             _("online"), color="green"
-                        ).classes("text-h5 q-pa-sm q-px-lg")
+                        ).classes(
+                            "text-h5 q-pa-sm q-px-lg"
+                        ).props('id="server-status-badge"')
                         ui.label(_("server_status")).classes("text-h6")
 
                 # Card 2: Total number of projects.
@@ -367,3 +371,32 @@ def register():
                 ):
                     separator = '<span style="margin: 0 10px;">&bull;</span>'
                     ui.html(separator.join(footer_lines))
+
+        # -- Client-side server status monitor -----------------------------------
+        # The online badge is driven by the Socket.IO connection state: when the
+        # server stops, the websocket drops and the badge turns red ("Offline");
+        # on reconnect it turns green ("Online") again. This only works client-
+        # side because a stopped server cannot update the page itself.
+        ui.run_javascript(
+            f"""(function () {{
+    function webduckApplyStatus() {{
+        var badge = document.getElementById('server-status-badge');
+        if (!badge) return false;
+        var online = !!(window.socket && window.socket.connected);
+        badge.classList.remove('bg-green', 'bg-red');
+        badge.classList.add(online ? 'bg-green' : 'bg-red');
+        badge.textContent = online ? '{_("online")}' : '{_("offline")}';
+        return true;
+    }}
+    function webduckAttachStatus() {{
+        if (!window.socket || !webduckApplyStatus()) {{
+            setTimeout(webduckAttachStatus, 250);
+            return;
+        }}
+        window.socket.on('connect', webduckApplyStatus);
+        window.socket.on('disconnect', webduckApplyStatus);
+        setInterval(webduckApplyStatus, 1000);
+    }}
+    webduckAttachStatus();
+}})();"""
+        )
