@@ -199,6 +199,9 @@ async def delete_project(project: str, username: str = Depends(verify_admin)) ->
     if not await asyncio.to_thread(storage_engine.delete_project, project):
         raise HTTPException(status_code=404, detail="Project not found")
 
+    from webduck.pages.user_prefs import remove_query_history
+    remove_query_history(project)
+
     return {"success": True, "message": f"Project '{project}' deleted"}
 
 
@@ -290,6 +293,9 @@ async def delete_database(
     if not await asyncio.to_thread(storage_engine.delete_database, project, database):
         raise HTTPException(status_code=404, detail="Database not found")
 
+    from webduck.pages.user_prefs import remove_query_history
+    remove_query_history(project, database)
+
     return {"success": True, "message": f"Database '{database}' deleted"}
 
 
@@ -374,5 +380,8 @@ async def delete_user(
 
     if not await asyncio.to_thread(auth_manager.delete_user, target_username):
         raise HTTPException(status_code=404, detail="User not found")
+
+    from webduck.pages.user_prefs import remove_user_data
+    remove_user_data(target_username)
 
     return {"success": True, "message": f"User '{target_username}' deleted"}

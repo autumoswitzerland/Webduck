@@ -8,6 +8,7 @@ from webduck.pages.user_prefs import (
     _prune_history_data,
     _prune_prefs_data,
     _push_history_entry,
+    _remove_history_refs,
 )
 
 
@@ -95,35 +96,51 @@ class TestPrunePrefsData:
         }
 
 
-class TestPruneHistoryData:
-    def test_drops_deleted_database(self):
-        data = {"mike": {"proj": {"sales": ["SELECT 1"]}}}
-        cleaned = _prune_history_data(data, {"proj"}, lambda p: {"other"})
+class TestRemoveHistoryRefs:
+    def test_removes_single_database_keeps_others(self):
+        data = {"mike": {"proj": {"sales": ["SELECT 1"], "other": ["SELECT 2"]}}}
+        cleaned = _remove_history_refs(data, "proj", "sales")
+        assert cleaned == {"mike": {"proj": {"other": ["SELECT 2"]}}}
+
+    def test_removes_whole_project_without_database(self):
+        data = {"mike": {"proj": {"sales": ["SELECT 1"], "other": ["SELECT 2"]}}}
+        cleaned = _remove_history_refs(data, "proj")
         assert cleaned == {}
 
-    def test_keeps_existing_database(self):
+    def test_removes_project_across_all_users(self):
+        data = {
+            "mike": {"proj": {"sales": ["SELECT 1"]}},
+            "anna": {"proj": {"sales": ["SELECT 2"]}, "other": {"db": ["SELECT 3"]}},
+        }
+        cleaned = _remove_history_refs(data, "proj")
+        assert cleaned == {"anna": {"other": {"db": ["SELECT 3"]}}}
+
+    def test_cascades_empty_projects_and_users(self):
+        data = {"mike": {"proj": {"sales": ["SELECT 1"]}}, "anna": {}}
+        cleaned = _remove_history_refs(data, "proj", "sales")
+        assert cleaned == {"anna": {}}
+
+    def test_leaves_unrelated_users_untouched(self):
+        data = {
+            "mike": {"proj": {"sales": ["SELECT 1"]}},
+            "anna": {"other": {"db": ["SELECT 2"]}},
+        }
+        cleaned = _remove_history_refs(data, "proj", "sales")
+        assert cleaned == {"anna": {"other": {"db": ["SELECT 2"]}}}
+
+    def test_no_change_when_target_missing(self):
         data = {"mike": {"proj": {"sales": ["SELECT 1"]}}}
-        cleaned = _prune_history_data(data, {"proj"}, lambda p: {"sales"})
+        cleaned = _remove_history_refs(data, "proj", "missing")
         assert cleaned == data
 
-    def test_drops_deleted_project(self):
-        data = {"mike": {"gone": {"sales": ["SELECT 1"]}}}
-        cleaned = _prune_history_data(data, {"alive"}, lambda p: {"sales"})
-        assert cleaned == {}
-
-    def test_drops_old_flat_format(self):
-        data = {"mike": {"sales": ["SELECT 1"]}}
-        cleaned = _prune_history_data(data, {"proj"}, lambda p: {"sales"})
-        assert cleaned == {}
-
-    def test_drops_empty_users_and_projects(self):
-        data = {"mike": {}, "anna": {"proj": {}}}
-        cleaned = _prune_history_data(data, {"proj"}, lambda p: {"sales"})
-        assert cleaned == {}
+    def test_no_change_when_project_missing(self):
+        data = {"mike": {"proj": {"sales": ["SELECT 1"]}}}
+        cleaned = _remove_history_refs(data, "gone")
+        assert cleaned == data
 
 
 class TestPruneUserData:
-    """Integration tests for the file-level prune_user_data() cleanup.
+    """Integration tests for the prefs cleanup at server startup.
 
     Uses a real StorageEngine on a temp data dir so the prune is
     exercised end-to-end (filesystem scan -> JSON read -> write).
@@ -161,25 +178,6 @@ class TestPruneUserData:
             "mike": {"query_project": "alive"}
         }
 
-    def test_prunes_history_for_deleted_database(self, monkeypatch, tmp_path):
-        self._setup(monkeypatch, tmp_path)
-        from webduck.pages import user_prefs
-
-        user_prefs._save_history(
-            {"mike": {"alive": {"gone": ["SELECT 1"]}}}
-        )
-        user_prefs.prune_user_data()
-        assert user_prefs._load_history() == {}
-
-    def test_keeps_valid_history(self, monkeypatch, tmp_path):
-        self._setup(monkeypatch, tmp_path)
-        from webduck.pages import user_prefs
-
-        data = {"mike": {"alive": {"sales": ["SELECT 1"]}}}
-        user_prefs._save_history(data)
-        user_prefs.prune_user_data()
-        assert user_prefs._load_history() == data
-
     def test_does_not_write_when_nothing_stale(self, monkeypatch, tmp_path):
         self._setup(monkeypatch, tmp_path)
         from webduck.pages import user_prefs
@@ -192,23 +190,213 @@ class TestPruneUserData:
         user_prefs.prune_user_data()
         assert prefs_path.stat().st_mtime_ns == mtime_before
 
-    def test_maybe_prune_at_most_once_per_interval(self, monkeypatch, tmp_path):
+    def test_prune_does_not_touch_query_history(self, monkeypatch, tmp_path):
+        """Query history is never pruned — only targeted removal deletes it."""
         self._setup(monkeypatch, tmp_path)
         from webduck.pages import user_prefs
 
-        calls = []
-        monkeypatch.setattr(
-            user_prefs, "prune_user_data", lambda: calls.append(1)
-        )
-        monkeypatch.setattr(user_prefs, "_last_prune", 0.0)
-        monkeypatch.setattr(user_prefs.time, "monotonic", lambda: 7200.0)
+        data = {"mike": {"alive": {"gone": ["SELECT 1"]}}}
+        user_prefs._save_history(data)
+        user_prefs.prune_user_data()
+        assert user_prefs._load_history() == data
 
-        user_prefs._maybe_prune()
-        user_prefs._maybe_prune()
-        assert len(calls) == 1
 
-        monkeypatch.setattr(
-            user_prefs.time, "monotonic", lambda: 7200.0 + 7200
+class TestPruneHistoryData:
+    def test_drops_project_that_is_fully_gone(self):
+        data = {"mike": {"gone": {"sales": ["SELECT 1"]}}}
+        cleaned = _prune_history_data(data, set(), set(), lambda p: set(), lambda p: set())
+        assert cleaned == {}
+
+    def test_drops_database_that_is_fully_gone(self):
+        data = {"mike": {"alive": {"sales": ["SELECT 1"]}}}
+        cleaned = _prune_history_data(data, {"alive"}, set(), lambda p: {"other"}, lambda p: set())
+        assert cleaned == {}
+
+    def test_keeps_live_project_and_database(self):
+        data = {"mike": {"alive": {"sales": ["SELECT 1"]}}}
+        cleaned = _prune_history_data(data, {"alive"}, set(), lambda p: {"sales"}, lambda p: set())
+        assert cleaned == data
+
+    def test_keeps_history_for_trashed_database(self):
+        data = {"mike": {"alive": {"sales": ["SELECT 1"]}}}
+        cleaned = _prune_history_data(
+            data, {"alive"}, set(), lambda p: set(), lambda p: {"sales"}
         )
-        user_prefs._maybe_prune()
-        assert len(calls) == 2
+        assert cleaned == data
+
+    def test_keeps_whole_trashed_project(self):
+        data = {"mike": {"gone": {"sales": ["SELECT 1"]}}}
+        cleaned = _prune_history_data(
+            data, set(), {"gone"}, lambda p: set(), lambda p: set()
+        )
+        assert cleaned == data
+
+    def test_mixed_scenario(self):
+        data = {
+            "mike": {
+                "alive": {"sales": ["S1"], "gone_db": ["S2"]},
+                "trashed": {"x": ["S3"]},
+                "gone": {"z": ["S4"]},
+            }
+        }
+        cleaned = _prune_history_data(
+            data,
+            {"alive"},
+            {"trashed"},
+            lambda p: {"sales"},
+            lambda p: set(),
+        )
+        assert cleaned == {
+            "mike": {
+                "alive": {"sales": ["S1"]},
+                "trashed": {"x": ["S3"]},
+            }
+        }
+
+    def test_cascades_empty_users(self):
+        data = {"mike": {"gone": {"sales": ["SELECT 1"]}}, "anna": {}}
+        cleaned = _prune_history_data(data, set(), set(), lambda p: set(), lambda p: set())
+        assert cleaned == {}
+
+    def test_leaves_unrelated_users_untouched(self):
+        data = {
+            "mike": {"alive": {"sales": ["SELECT 1"]}},
+            "anna": {"other": {"db": ["SELECT 2"]}},
+        }
+        cleaned = _prune_history_data(
+            data, {"alive", "other"}, set(), lambda p: {"sales", "db"}, lambda p: set()
+        )
+        assert cleaned == data
+
+
+class TestPruneHistorySweep:
+    """Integration tests for the query-history sweep at server startup."""
+
+    def _setup(self, monkeypatch, tmp_path):
+        from webduck.pages import context
+        from webduck.storage.engine import StorageEngine
+
+        store = StorageEngine(tmp_path)
+        monkeypatch.setattr(context, "storage", store)
+        store.create_project("alive")
+        (tmp_path / "alive" / "sales.duckdb").touch()
+
+        store.create_project("trashed_proj")
+        (tmp_path / "trashed_proj" / "x.duckdb").touch()
+        store.trash_project("trashed_proj")
+
+        store.create_project("trashed_db_proj")
+        (tmp_path / "trashed_db_proj" / "db.duckdb").touch()
+        store.trash_database("trashed_db_proj", "db")
+        return store
+
+    def test_removes_history_for_fully_deleted_objects(self, monkeypatch, tmp_path):
+        self._setup(monkeypatch, tmp_path)
+        from webduck.pages import user_prefs
+
+        user_prefs._save_history(
+            {
+                "mike": {
+                    "alive": {"sales": ["S1"], "gone_db": ["S2"]},
+                    "trashed_proj": {"x": ["S3"]},
+                    "trashed_db_proj": {"db": ["S4"]},
+                    "fullygone": {"z": ["S5"]},
+                }
+            }
+        )
+        user_prefs.prune_history_data()
+        assert user_prefs._load_history() == {
+            "mike": {
+                "alive": {"sales": ["S1"]},
+                "trashed_proj": {"x": ["S3"]},
+                "trashed_db_proj": {"db": ["S4"]},
+            }
+        }
+
+    def test_does_not_write_when_nothing_stale(self, monkeypatch, tmp_path):
+        self._setup(monkeypatch, tmp_path)
+        from webduck.pages import user_prefs
+
+        user_prefs._save_history(
+            {"mike": {"alive": {"sales": ["SELECT 1"]}}}
+        )
+        history_path = tmp_path / ".query_history.json"
+        mtime_before = history_path.stat().st_mtime_ns
+        user_prefs.prune_history_data()
+        assert history_path.stat().st_mtime_ns == mtime_before
+
+
+class TestRemoveQueryHistory:
+    def _setup(self, monkeypatch, tmp_path):
+        from webduck.pages import context
+        from webduck.storage.engine import StorageEngine
+
+        store = StorageEngine(tmp_path)
+        monkeypatch.setattr(context, "storage", store)
+        return store
+
+    def test_removes_database_history(self, monkeypatch, tmp_path):
+        self._setup(monkeypatch, tmp_path)
+        from webduck.pages import user_prefs
+
+        user_prefs._save_history(
+            {"mike": {"proj": {"sales": ["SELECT 1"], "other": ["SELECT 2"]}}}
+        )
+        user_prefs.remove_query_history("proj", "sales")
+        assert user_prefs._load_history() == {
+            "mike": {"proj": {"other": ["SELECT 2"]}}
+        }
+
+    def test_removes_whole_project_history(self, monkeypatch, tmp_path):
+        self._setup(monkeypatch, tmp_path)
+        from webduck.pages import user_prefs
+
+        user_prefs._save_history(
+            {"mike": {"proj": {"sales": ["SELECT 1"]}}, "anna": {"proj": {"x": ["S"]}}}
+        )
+        user_prefs.remove_query_history("proj")
+        assert user_prefs._load_history() == {}
+
+    def test_does_not_write_when_nothing_to_remove(self, monkeypatch, tmp_path):
+        self._setup(monkeypatch, tmp_path)
+        from webduck.pages import user_prefs
+
+        data = {"mike": {"proj": {"sales": ["SELECT 1"]}}}
+        user_prefs._save_history(data)
+        history_path = tmp_path / ".query_history.json"
+        mtime_before = history_path.stat().st_mtime_ns
+        user_prefs.remove_query_history("proj", "missing")
+        assert history_path.stat().st_mtime_ns == mtime_before
+
+
+class TestRemoveUserData:
+    def _setup(self, monkeypatch, tmp_path):
+        from webduck.pages import context
+        from webduck.storage.engine import StorageEngine
+
+        store = StorageEngine(tmp_path)
+        monkeypatch.setattr(context, "storage", store)
+        return store
+
+    def test_removes_user_from_prefs_and_history(self, monkeypatch, tmp_path):
+        self._setup(monkeypatch, tmp_path)
+        from webduck.pages import user_prefs
+
+        user_prefs._save_prefs(
+            {"mike": {"query_project": "proj"}, "anna": {"query_project": "proj"}}
+        )
+        user_prefs._save_history(
+            {"mike": {"proj": {"sales": ["SELECT 1"]}}, "anna": {"proj": {"x": ["S"]}}}
+        )
+        user_prefs.remove_user_data("mike")
+        assert user_prefs._load_prefs() == {"anna": {"query_project": "proj"}}
+        assert user_prefs._load_history() == {"anna": {"proj": {"x": ["S"]}}}
+
+    def test_missing_user_is_noop(self, monkeypatch, tmp_path):
+        self._setup(monkeypatch, tmp_path)
+        from webduck.pages import user_prefs
+
+        data = {"mike": {"proj": {"sales": ["SELECT 1"]}}}
+        user_prefs._save_history(data)
+        user_prefs.remove_user_data("nobody")
+        assert user_prefs._load_history() == data

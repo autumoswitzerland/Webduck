@@ -885,6 +885,36 @@ class StorageEngine:
         order.insert(0, project)
         self._save_project_order(order)
 
+    def delete_trash_entry(self, trash_name: str) -> bool:
+        """Permanently delete a single trash entry.
+
+        The destructive counterpart of the trash concept for one entry:
+        the file/directory and its sidecar metadata are removed for good.
+        Returns ``True`` if the entry existed and was removed.
+        """
+        path = self.trash_dir / trash_name
+        if not path.exists():
+            return False
+
+        db_files = (
+            sorted(p for p in path.glob("*.duckdb") if p.is_file())
+            if path.is_dir()
+            else []
+        )
+        locks = [self._get_lock(str(p)) for p in db_files]
+        for lock in locks:
+            lock.acquire_write()
+        try:
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink(missing_ok=True)
+            self._delete_trash_meta(trash_name)
+        finally:
+            for lock in reversed(locks):
+                lock.release_write()
+        return True
+
     def empty_trash(self) -> int:
         """Permanently delete all trash entries.
 
@@ -897,25 +927,8 @@ class StorageEngine:
             return 0
         count = 0
         for entry in self.list_trash():
-            path = self.trash_dir / entry["name"]
-            db_files = (
-                sorted(p for p in path.glob("*.duckdb") if p.is_file())
-                if path.is_dir()
-                else []
-            )
-            locks = [self._get_lock(str(p)) for p in db_files]
-            for lock in locks:
-                lock.acquire_write()
-            try:
-                if path.is_dir():
-                    shutil.rmtree(path)
-                else:
-                    path.unlink(missing_ok=True)
-                self._delete_trash_meta(entry["name"])
-            finally:
-                for lock in reversed(locks):
-                    lock.release_write()
-            count += 1
+            if self.delete_trash_entry(entry["name"]):
+                count += 1
         # Drop the (now empty) trash directory itself.
         try:
             self.trash_dir.rmdir()

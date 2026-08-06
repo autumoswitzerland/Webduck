@@ -24,7 +24,6 @@ calls (no locking needed since NiceGUI runs in a single process).
 """
 
 import json
-import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -78,7 +77,6 @@ def get_user_pref(view: str, field: str) -> str | None:
         The stored string value, or ``None`` if not set or no user
         is logged in.
     """
-    _maybe_prune()
     username = nicegui_app.storage.user.get("username", "")
     if not username:
         return None
@@ -93,7 +91,6 @@ def set_user_pref(view: str, field: str, value: str) -> None:
     collisions between different views that use the same field name
     (e.g. both "query" and "browse" store a "database" preference).
     """
-    _maybe_prune()
     username = nicegui_app.storage.user.get("username", "")
     if not username:
         return
@@ -142,7 +139,6 @@ def get_query_history(project: str, database: str) -> list[str]:
     first, oldest last.  Returns an empty list when nothing was saved yet
     or no user is logged in.
     """
-    _maybe_prune()
     username = nicegui_app.storage.user.get("username", "")
     if not username:
         return []
@@ -164,7 +160,6 @@ def add_query_history(project: str, database: str, sql: str) -> None:
     """
     from webduck.main import QUERY_HISTORY_MAX
 
-    _maybe_prune()
     username = nicegui_app.storage.user.get("username", "")
     if not username:
         return
@@ -192,17 +187,11 @@ def _push_history_entry(entries: list, sql: str, max_entries: int) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Stale-data cleanup — drop preferences and query-history entries that
-# reference projects/databases which no longer exist on disk.
+# Stale-data cleanup — drop preferences that reference projects/databases
+# which no longer exist on disk.  Query history is NOT pruned periodically;
+# it is removed in a targeted way whenever a project/database is permanently
+# deleted (see remove_query_history below).
 # ---------------------------------------------------------------------------
-
-# Minimum time between two automatic cleanups while the server runs.
-# A full cleanup needs filesystem scans, so it runs at most this often
-# instead of on every accessor call.
-_PRUNE_INTERVAL_SECONDS = 3600
-
-_last_prune: float = 0.0
-
 
 def _prune_prefs_data(
     prefs: dict,
@@ -247,53 +236,12 @@ def _prune_prefs_data(
     return cleaned
 
 
-def _prune_history_data(
-    data: dict,
-    existing_projects: set,
-    dbs_for: Callable[[str], set],
-) -> dict:
-    """Drop query-history entries whose project or database is gone.
-
-    Structure: ``{username: {project: {database: [sql, ...]}}}``.  Any
-    malformed value (e.g. the old flat format) is dropped as well, which
-    lets the cleanup migrate away legacy data.  Users left with nothing
-    are dropped.  Pure dict logic kept separate so it can be unit-tested
-    without storage or a session.
-    """
-    cleaned: dict = {}
-    for username, per_project in data.items():
-        if not isinstance(per_project, dict):
-            continue
-        kept_projects: dict = {}
-        for project, per_db in per_project.items():
-            if (
-                project not in existing_projects
-                or not isinstance(per_db, dict)
-            ):
-                continue
-            kept_dbs = {
-                db: entries
-                for db, entries in per_db.items()
-                if isinstance(entries, list)
-                and db in dbs_for(project)
-            }
-            if kept_dbs:
-                kept_projects[project] = kept_dbs
-        if kept_projects:
-            cleaned[username] = kept_projects
-    return cleaned
-
-
 def prune_user_data() -> None:
-    """Remove preferences and history entries pointing at missing data.
+    """Remove preferences entries pointing at missing data.
 
-    Scans the filesystem once, prunes both JSON files, and only writes a
-    file back when something actually changed.  Called at server startup
-    and, via :func:`_maybe_prune`, at most once per interval while the
-    server keeps running.
+    Scans the filesystem once, prunes the preferences file, and only writes
+    it back when something actually changed.  Called once at server startup.
     """
-    global _last_prune
-    _last_prune = time.monotonic()
     from webduck.pages.context import storage
     if storage is None:
         return
@@ -311,24 +259,161 @@ def prune_user_data() -> None:
     if cleaned_prefs != prefs:
         _save_prefs(cleaned_prefs)
 
-    history = _load_history()
-    cleaned_history = _prune_history_data(
-        history, existing_projects, dbs_for
-    )
-    if cleaned_history != history:
-        _save_history(cleaned_history)
 
+# ---------------------------------------------------------------------------
+# Stale query-history sweep — run once at startup.  History is normally only
+# removed in a targeted way (see remove_query_history) whenever an object is
+# permanently deleted.  As a safety net this sweep additionally drops history
+# entries whose project/database no longer exists AND is not in the trash
+# either (e.g. objects deleted before the targeted removal existed, or
+# removed directly on the server).  Entries for live or restorable objects
+# are never touched.
+# ---------------------------------------------------------------------------
 
-def _maybe_prune() -> None:
-    """Run the stale-data cleanup at most once per interval.
+def _prune_history_data(
+    data: dict,
+    existing_projects: set,
+    trashed_projects: set,
+    dbs_for: Callable[[str], set],
+    trashed_dbs_for: Callable[[str], set],
+) -> dict:
+    """Drop query-history entries for projects/databases that are fully gone.
 
-    Called from every accessor function; the time guard keeps the
-    filesystem scan from running on every single call.  The first call
-    after server start also performs the initial cleanup.
+    Structure: ``{username: {project: {database: [sql, ...]}}}``.  A project
+    key is kept when it exists as a live project or sits in the trash as a
+    whole project (restorable).  For live projects, individual database keys
+    are kept when the database is live or in the trash; anything else is
+    dropped.  Empty users are cascaded away.  Pure dict logic kept separate
+    so it can be unit-tested without storage or a session.
     """
-    global _last_prune
-    now = time.monotonic()
-    if now - _last_prune < _PRUNE_INTERVAL_SECONDS:
+    cleaned: dict = {}
+    for username, per_project in data.items():
+        if not isinstance(per_project, dict):
+            continue
+        out: dict = {}
+        for project, per_db in per_project.items():
+            if not isinstance(per_db, dict):
+                continue
+            if project not in existing_projects:
+                if project not in trashed_projects:
+                    continue
+                out[project] = per_db
+                continue
+            kept_db = {
+                db: entries
+                for db, entries in per_db.items()
+                if db in dbs_for(project) or db in trashed_dbs_for(project)
+            }
+            if kept_db:
+                out[project] = kept_db
+        if out:
+            cleaned[username] = out
+    return cleaned
+
+
+def prune_history_data() -> None:
+    """Remove query-history entries pointing at fully deleted objects.
+
+    Scans the filesystem and trash once, prunes the history file, and only
+    writes it back when something actually changed.  Called once at server
+    startup together with prune_user_data().
+    """
+    from webduck.pages.context import storage
+    if storage is None:
         return
-    _last_prune = now
-    prune_user_data()
+    projects = storage.list_projects()
+    existing_projects = set(projects)
+    active_dbs = {p: set(storage.list_databases(p)) for p in projects}
+    trash = storage.list_trash()
+    trashed_projects = {
+        e["project"] for e in trash if e.get("type") == "project"
+    }
+    trashed_dbs: dict = {}
+    for e in trash:
+        if e.get("type") == "database":
+            trashed_dbs.setdefault(e["project"], set()).add(e["database"])
+
+    data = _load_history()
+    cleaned = _prune_history_data(
+        data,
+        existing_projects,
+        trashed_projects,
+        lambda p: active_dbs.get(p, set()),
+        lambda p: trashed_dbs.get(p, set()),
+    )
+    if cleaned != data:
+        _save_history(cleaned)
+
+
+# ---------------------------------------------------------------------------
+# Targeted query-history removal — called when a project/database is
+# permanently deleted (trash or API hard-delete).  Nothing is pruned
+# periodically; history is only ever removed for the object being deleted.
+# ---------------------------------------------------------------------------
+
+def _remove_history_refs(
+    data: dict,
+    project: str,
+    database: str | None = None,
+) -> dict:
+    """Drop query-history entries for one project (and optionally one db).
+
+    Structure: ``{username: {project: {database: [sql, ...]}}}``.  With
+    ``database=None`` the whole ``project`` key is removed per user; with a
+    database name only that database's entry.  Empty projects and users are
+    cascaded away.  Pure dict logic kept separate so it can be unit-tested
+    without storage or a session.
+    """
+    cleaned: dict = {}
+    for username, per_project in data.items():
+        if not isinstance(per_project, dict):
+            continue
+        if project not in per_project:
+            cleaned[username] = per_project
+            continue
+        out = dict(per_project)
+        if database is None:
+            out.pop(project, None)
+        else:
+            per_db = out.get(project)
+            if isinstance(per_db, dict):
+                kept_db = {db: entries for db, entries in per_db.items() if db != database}
+                if kept_db:
+                    out[project] = kept_db
+                else:
+                    out.pop(project, None)
+        if out:
+            cleaned[username] = out
+    return cleaned
+
+
+def remove_query_history(project: str, database: str | None = None) -> None:
+    """Remove query-history entries for a permanently deleted object.
+
+    Without ``database`` the history of the whole project is removed,
+    otherwise only that database's entries.  The file is only written when
+    something actually changed.
+    """
+    from webduck.pages.context import storage
+    if storage is None:
+        return
+    data = _load_history()
+    cleaned = _remove_history_refs(data, project, database)
+    if cleaned != data:
+        _save_history(cleaned)
+
+
+def remove_user_data(username: str) -> None:
+    """Remove all preferences and query-history entries of a deleted user."""
+    from webduck.pages.context import storage
+    if storage is None:
+        return
+    prefs = _load_prefs()
+    if username in prefs:
+        prefs.pop(username)
+        _save_prefs(prefs)
+
+    history = _load_history()
+    if username in history:
+        history.pop(username)
+        _save_history(history)

@@ -39,6 +39,7 @@ NiceGUI (Web UI), DuckDB storage, and authentication into a single process
 served on one port.  The ``main()`` function exposes three CLI commands:
 
 * ``webduck init``  — create the first admin user and write a config file.
+* ``webduck user``  — add, list, or delete admin users (no roles concept).
 * ``webduck start`` — boot the full server (FastAPI + NiceGUI + uvicorn).
 * ``webduck status`` — print project/database/user counts from the data dir.
 """
@@ -368,10 +369,12 @@ def setup_app(cfg: WebDuckConfig) -> FastAPI:
 def main():
     """Main entry point for CLI.
 
-    Registers three Click commands under the ``webduck`` group:
+    Registers four Click command groups under the ``webduck`` group:
 
     * ``webduck init``  — interactive or non-interactive admin user creation;
       auto-generates a JWT secret on first run and saves a starter config.
+    * ``webduck user``  — ``add``/``list``/``delete`` admin users on an
+      existing data directory.
     * ``webduck start`` — boots the full stack (FastAPI + NiceGUI + uvicorn).
     * ``webduck status`` — reads the data directory and prints project,
       database, and user counts.
@@ -455,6 +458,108 @@ def main():
         click.echo("Initialization complete!")
 
     # -----------------------------------------------------------------
+    #  webduck user (add | list | delete)
+    # -----------------------------------------------------------------
+    @cli.group()
+    def user():
+        """Manage WebDuck admin users (no roles concept)."""
+
+    @user.command("add")
+    @click.argument("username")
+    @click.argument("password")
+    @click.option(
+        "--config", type=click.Path(), default=None,
+        help="Config file path",
+    )
+    def user_add(config, username, password):
+        """Add a new admin user.
+
+        Every WebDuck user is an admin — there are no roles yet.
+        """
+        config_path = Path(config) if config else Path("webduck.yaml")
+        cfg = load_config(config_path)
+        cfg.server.data_dir.mkdir(parents=True, exist_ok=True)
+
+        auth = AuthManager(
+            cfg.server.data_dir,
+            cfg.auth.jwt_secret,
+            cfg.auth.jwt_algorithm,
+        )
+        if auth.create_user(username, password):
+            click.echo(f"Admin user '{username}' created successfully")
+        else:
+            click.echo(f"Error: User '{username}' already exists", err=True)
+            sys.exit(1)
+
+    @user.command("list")
+    @click.option(
+        "--config", type=click.Path(), default=None,
+        help="Config file path",
+    )
+    def user_list(config):
+        """List all admin users."""
+        config_path = Path(config) if config else Path("webduck.yaml")
+        cfg = load_config(config_path)
+
+        auth = AuthManager(
+            cfg.server.data_dir,
+            cfg.auth.jwt_secret,
+            cfg.auth.jwt_algorithm,
+        )
+        users = auth.list_users()
+        if users:
+            for name in sorted(users):
+                click.echo(name)
+        else:
+            click.echo("No users")
+
+    @user.command("delete")
+    @click.argument("username")
+    @click.option(
+        "--config", type=click.Path(), default=None,
+        help="Config file path",
+    )
+    def user_delete(config, username):
+        """Delete an admin user.
+
+        Also removes the user's stored preferences and query history.
+        """
+        config_path = Path(config) if config else Path("webduck.yaml")
+        cfg = load_config(config_path)
+
+        auth = AuthManager(
+            cfg.server.data_dir,
+            cfg.auth.jwt_secret,
+            cfg.auth.jwt_algorithm,
+        )
+        if username not in auth.list_users():
+            click.echo(f"Error: User '{username}' not found", err=True)
+            sys.exit(1)
+
+        # Deleting the last remaining admin would lock everyone out
+        # (init can recreate one, but the warning is still worth it).
+        if len(auth.list_users()) == 1:
+            if not click.confirm(
+                f"'{username}' is the last remaining admin user. "
+                "Deleting it leaves WebDuck without any admin. Continue?"
+            ):
+                click.echo("Aborted")
+                sys.exit(1)
+
+        if not auth.delete_user(username):
+            click.echo(f"Error: User '{username}' not found", err=True)
+            sys.exit(1)
+
+        # Wire a StorageEngine into the shared context so the lazy
+        # user_prefs helpers can locate the preferences/history files.
+        from webduck.pages import context
+        context.storage = StorageEngine(cfg.server.data_dir)
+        from webduck.pages.user_prefs import remove_user_data
+        remove_user_data(username)
+
+        click.echo(f"Admin user '{username}' deleted")
+
+    # -----------------------------------------------------------------
     #  webduck start
     # -----------------------------------------------------------------
     @cli.command()
@@ -507,12 +612,15 @@ def main():
         from webduck.pages.context import init_context
         init_context(cfg, _storage, _auth, _project_auth)
 
-        # --- Prune stale user data (prefs + query history) ---
+        # --- Prune stale user preferences (prefs only) ---
         # Drop references to projects/databases that no longer exist.
-        # Afterwards it also runs lazily at most once per hour whenever a
-        # page accessor is called, so long-running servers stay clean.
-        from webduck.pages.user_prefs import prune_user_data
+        # Query history is normally removed in a targeted way whenever a
+        # project/database is permanently deleted; as a safety net the
+        # startup sweep additionally drops history entries whose object is
+        # fully gone (neither live nor in the trash).
+        from webduck.pages.user_prefs import prune_history_data, prune_user_data
         prune_user_data()
+        prune_history_data()
 
         # --- Register NiceGUI pages ---
         # Each page module exposes a ``register()`` that binds a URL route

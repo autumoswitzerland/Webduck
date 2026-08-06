@@ -24,7 +24,6 @@ Provides two modes of SQL execution:
 import asyncio
 import re
 
-from nicegui import app as nicegui_app
 from nicegui import events, ui
 
 from webduck.pages import context as ctx
@@ -40,6 +39,7 @@ from webduck.pages.ui_helpers import (
     make_drawer,
     make_footer,
     make_header,
+    require_user,
 )
 from webduck.pages.user_prefs import (
     add_query_history,
@@ -59,9 +59,9 @@ def register():
         apply_dark_theme()
         ui.page_title(f"WebDuck {ctx.version} — SQL Queries")
 
-        # Auth guard: redirect to login if no session token exists.
-        if "token" not in nicegui_app.storage.user:
-            ui.navigate.to("/login")
+        # Auth guard: redirect to login if the session is invalid or the
+        # user account no longer exists (e.g. deleted while logged in).
+        if not require_user():
             return
 
         make_header(_)
@@ -341,6 +341,10 @@ def register():
                 as either a table or a status message.  On full success
                 the input is cleared.
                 """
+                # A deleted user must not execute anything — even on a page
+                # that was already open before the account was removed.
+                if not require_user():
+                    return
                 if not sql_input.value or not database_select.value:
                     return
 
@@ -539,11 +543,15 @@ def register():
                 """Execute the uploaded SQL file contents.
 
                 Retrieves the text from the JS global ``_sqlUploadContent``,
-                shows a spinner dialog while queries run in a background
+                shows a                 spinner dialog while queries run in a background
                 thread, then displays a success/error summary.  On full
                 success the upload state is reset (file info cleared,
                 drop zone border reset).
                 """
+                # A deleted user must not execute anything — even on a page
+                # that was already open before the account was removed.
+                if not require_user():
+                    return
                 if not database_select.value:
                     return
 

@@ -477,3 +477,18 @@ msgstr "Continue"
 
 msgid "deleted_at"
 msgstr "Deleted at"
+
+msgid "delete_permanently"
+msgstr "Delete permanently"
+
+msgid "confirm_delete_permanently_db"
+msgstr "Permanently delete database '{0}' in project '{1}'?"
+
+msgid "confirm_delete_permanently_project"
+msgstr "Permanently delete project '{0}'?"
+
+msgid "confirm_delete_permanently_hint"
+msgstr "The object will be removed for good. This cannot be undone."
+
+msgid "deleted_permanently"
+msgstr "Permanently deleted."

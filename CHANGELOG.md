@@ -41,6 +41,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a storage overview table with per-project sizes and a trash line. The
   traffic counter only counts authenticated database API calls (query, write,
   tables, import, export) — GUI, admin and metadata endpoints are excluded.
+- `webduck user` CLI command group for managing admin users on an existing
+  data directory: `webduck user add <name> <password>`, `webduck user list`
+  and `webduck user delete <name>`. Deleting the last remaining admin user
+  asks for confirmation first (an admin can always be recreated via
+  `webduck init`). `user delete` also removes the deleted user's stored
+  preferences and query history. There is no role concept yet — every user
+  is an admin.
+- Startup sweep for stale query history: on server start, history entries
+  whose project/database no longer exists — and is not in the trash either —
+  are removed. This catches objects deleted before the targeted cleanup
+  existed or removed directly on the server. History for live or restorable
+  objects is never touched.
+- Permanent delete of individual trash entries: each entry in the trash can
+  be deleted for good (with confirmation) in addition to emptying the whole
+  trash.
+
+### Changed
+- Query history is now removed in a targeted way only when a project/database
+  is permanently deleted — periodic pruning was removed. Final deletes
+  (permanent delete in the trash, emptying the trash, REST hard-delete) clean
+  up the affected history entries; deleting a user removes their preferences
+  and query history.
+- Deleted users are blocked in the Web UI immediately: page guards and action
+  handlers re-check that the logged-in user still exists and redirect to the
+  login page otherwise. The REST API is unchanged.
 
 ### Fixed
 - Success toasts on the projects and trash pages were wiped by the

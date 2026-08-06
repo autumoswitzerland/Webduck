@@ -23,6 +23,7 @@
 - **REST API** — admin endpoints (project/DB management) + database endpoints (SQL queries)
 - **Web UI** (NiceGUI) — dark mode with yellow/amber theme
 - **Dashboard** — server status cards, live REST traffic monitor (queries/min, active sessions), storage overview with per-project sizes and trash totals
+- **Trash** — soft-delete projects/databases with restore, permanent delete per entry, empty trash
 - **JWT authentication** for admin API, optional project-key auth for database access
 - **bcrypt password hashing** (never plaintext)
 - **SQL editor** — multi-statement support with sequential execution, query history (Alt+Up/Alt+Down, Alt+Enter)
@@ -79,6 +80,9 @@ docker compose up -d
 # Initialize - Create an admin user
 webduck init
 
+# Create additional admin users (optional)
+webduck user add anna secret
+
 # Start server
 webduck start
 ```
@@ -93,6 +97,9 @@ Log in with `admin` and the password you set.
 | Command | Description |
 |---------|-------------|
 | `webduck init` | Create admin user + default config |
+| `webduck user add <name> <password>` | Create an additional admin user |
+| `webduck user list` | List all admin users |
+| `webduck user delete <name>` | Delete an admin user (removes prefs + query history) |
 | `webduck start` | Start the server |
 | `webduck status` | Show projects and databases |
 
@@ -100,6 +107,8 @@ Options:
 
 ```bash
 webduck start --host 127.0.0.1 --port 8080 --config /path/to/webduck.yaml
+webduck user add anna secret
+webduck user add anna secret --config /path/to/webduck.yaml
 ```
 
 ## Configuration

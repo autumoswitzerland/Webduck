@@ -33,6 +33,7 @@ from webduck.pages.ui_helpers import (
     make_drawer,
     make_footer,
     make_header,
+    require_user,
 )
 
 # CSS styles
@@ -115,9 +116,9 @@ def register():
         apply_dark_theme()
         ui.page_title(f"WebDuck {ctx.version} — Dashboard")
 
-        # Auth guard: redirect to login if no session token exists.
-        if "token" not in nicegui_app.storage.user:
-            ui.navigate.to("/login")
+        # Auth guard: redirect to login if the session is invalid or the
+        # user account no longer exists (e.g. deleted while logged in).
+        if not require_user():
             return
 
         make_header(_)

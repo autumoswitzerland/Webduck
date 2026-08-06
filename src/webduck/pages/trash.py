@@ -32,6 +32,7 @@ from webduck.pages.ui_helpers import (
     make_drawer,
     make_footer,
     make_header,
+    require_user,
 )
 
 
@@ -55,9 +56,9 @@ def register():
         apply_dark_theme()
         ui.page_title(f"WebDuck {ctx.version} — Trash")
 
-        # Auth guard: redirect to login if no session token exists.
-        if "token" not in nicegui_app.storage.user:
-            ui.navigate.to("/login")
+        # Auth guard: redirect to login if the session is invalid or the
+        # user account no longer exists (e.g. deleted while logged in).
+        if not require_user():
             return
 
         # Show a flash message queued before a page reload (e.g. after a
@@ -87,6 +88,8 @@ def register():
                     ).props("outline color=grey").classes("border-button")
 
                     async def do_overwrite():
+                        if not require_user():
+                            return
                         dlg.close()
                         if result["type"] == "database":
                             res = await asyncio.to_thread(
@@ -117,6 +120,8 @@ def register():
 
         def restore_entry(entry: dict):
             async def do_restore():
+                if not require_user():
+                    return
                 trash_name = entry["name"]
                 if entry["type"] == "database":
                     result = await asyncio.to_thread(ctx.storage.restore_database, trash_name)
@@ -132,6 +137,52 @@ def register():
 
             return do_restore
 
+        # ── Permanently delete a single entry (no restore possible) ──
+        # Destructive and therefore guarded by a confirmation dialog. The
+        # object's query history is removed as well since it can never be
+        # restored again.
+        def delete_permanently(entry: dict):
+            async def do_delete():
+                if not require_user():
+                    return
+                with (
+                    ui.dialog() as dlg,
+                    ui.card().classes("items-center gap-4").style("background: #1E1E1E; border-radius: 12px; padding: 24px 32px;"),
+                ):
+                    if entry["type"] == "database":
+                        ui.label(_("confirm_delete_permanently_db").format(entry["database"], entry["project"])).style(f"color: {TEXT_SOFT}")
+                    else:
+                        ui.label(_("confirm_delete_permanently_project").format(entry["project"])).style(f"color: {TEXT_SOFT}")
+                    ui.label(_("confirm_delete_permanently_hint")).classes("text-caption").style("color: #999; max-width: 420px; text-align: center;")
+                    with ui.row().classes("gap-2"):
+                        ui.button(
+                            _("cancel"),
+                            on_click=dlg.close,
+                        ).props("outline color=grey").classes("border-button")
+
+                        def confirm():
+                            if not require_user():
+                                return
+                            dlg.close()
+                            if not ctx.storage.delete_trash_entry(entry["name"]):
+                                ui.notify(_("error"), type="negative")
+                                return
+                            from webduck.pages.user_prefs import remove_query_history
+                            if entry["type"] == "database":
+                                remove_query_history(entry["project"], entry["database"])
+                            else:
+                                remove_query_history(entry["project"])
+                            nicegui_app.storage.user["flash"] = _("deleted_permanently")
+                            ui.navigate.reload()
+
+                        ui.button(
+                            _("delete_permanently"),
+                            on_click=confirm,
+                        ).props("outline color=red").classes("border-button")
+                dlg.open()
+
+            return do_delete
+
         # ── Page title + empty-trash action ────────────────
         with ui.card().classes("w-full").style("margin-top: 4px"):
             with ui.row().classes("w-full items-center gap-4"):
@@ -139,6 +190,8 @@ def register():
                 ui.space()
 
                 async def empty_trash():
+                    if not require_user():
+                        return
                     with (
                         ui.dialog() as dlg,
                         ui.card().classes("items-center gap-4").style("background: #1E1E1E; border-radius: 12px; padding: 24px 32px;"),
@@ -151,8 +204,17 @@ def register():
                             ).props("outline color=grey").classes("border-button")
 
                             def do_empty():
+                                if not require_user():
+                                    return
                                 dlg.close()
                                 n = ctx.storage.empty_trash()
+                                if n:
+                                    from webduck.pages.user_prefs import remove_query_history
+                                    for e in entries:
+                                        if e["type"] == "database":
+                                            remove_query_history(e["project"], e["database"])
+                                        else:
+                                            remove_query_history(e["project"])
                                 nicegui_app.storage.user["flash"] = _("trash_emptied").format(n)
                                 ui.navigate.reload()
 
@@ -209,6 +271,11 @@ def register():
                     ui.button(
                         on_click=restore_entry(entry),
                     ).props('icon="restore" flat dense').style("color: #FFD54F;").tooltip(_("restore")).props("tooltip-position=top")
+                    ui.button(
+                        on_click=delete_permanently(entry),
+                    ).props('icon="delete_forever" flat dense').style("color: #EF5350;").tooltip(
+                        _("delete_permanently")
+                    ).props("tooltip-position=top")
 
                 # A trashed project keeps its databases — list them below.
                 if entry["type"] == "project" and entry.get("databases"):

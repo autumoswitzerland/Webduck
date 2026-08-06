@@ -38,6 +38,7 @@ from webduck.pages.ui_helpers import (
     make_drawer,
     make_footer,
     make_header,
+    require_user,
 )
 
 
@@ -84,9 +85,9 @@ def register():
         apply_dark_theme()
         ui.page_title(f"WebDuck {ctx.version} — Projects")
 
-        # Auth guard: redirect to login if no session token exists.
-        if "token" not in nicegui_app.storage.user:
-            ui.navigate.to("/login")
+        # Auth guard: redirect to login if the session is invalid or the
+        # user account no longer exists (e.g. deleted while logged in).
+        if not require_user():
             return
 
         # Show a flash message queued before a page reload (e.g. after a
@@ -151,6 +152,8 @@ def register():
                 ).classes("flex-grow")
 
                 async def create_project():
+                    if not require_user():
+                        return
                     if project_name.value:
                         ok = ctx.storage.create_project(
                             project_name.value
@@ -239,6 +242,8 @@ def register():
 
                             # Delete button with confirmation dialog.
                             async def delete_project(p=project):
+                                if not require_user():
+                                    return
                                 with ui.dialog() as dlg, ui.card().classes(
                                     "items-center gap-4"
                                 ).style(
@@ -257,6 +262,8 @@ def register():
                                         )
 
                                         def do_delete():
+                                            if not require_user():
+                                                return
                                             dlg.close()
                                             if ctx.storage.trash_project(p):
                                                 nicegui_app.storage.user["flash"] = _("moved_to_trash")
@@ -339,6 +346,8 @@ def register():
                                             async def remove_pw_confirm(
                                                 p=project, d=db_name
                                             ):
+                                                if not require_user():
+                                                    return
                                                 with ui.dialog() as dlg, ui.card().classes(
                                                     "items-center gap-4"
                                                 ).style(
@@ -357,6 +366,8 @@ def register():
                                                         )
 
                                                         def do_remove():
+                                                            if not require_user():
+                                                                return
                                                             dlg.close()
                                                             pa = (
                                                                 ctx.project_auth
@@ -413,6 +424,8 @@ def register():
                                         async def change_db_password(
                                             p=project, d=db_name
                                         ):
+                                            if not require_user():
+                                                return
                                             with ui.dialog() as dlg, ui.card().classes(
                                                 "items-center gap-4"
                                             ).style(
@@ -430,6 +443,8 @@ def register():
                                                 )
 
                                                 def do_save():
+                                                    if not require_user():
+                                                        return
                                                     if pw_input.value:
                                                         pa = ctx.project_auth or ProjectAuth(
                                                             ctx.storage.data_dir
@@ -473,6 +488,8 @@ def register():
                                         async def compress_db(
                                             p=project, d=db_name
                                         ):
+                                            if not require_user():
+                                                return
                                             size = ctx.storage.database_size(p, d)
                                             # Re-check the current state on click: the
                                             # background hint from page load may be stale
@@ -541,6 +558,8 @@ def register():
                                                     )
 
                                                     async def do_compress():
+                                                        if not require_user():
+                                                            return
                                                         dlg.close()
                                                         # Modal spinner while the compaction runs.
                                                         with ui.dialog() as pdlg, ui.card().classes(
@@ -698,6 +717,8 @@ def register():
                                         async def delete_db(
                                             p=project, d=db_name
                                         ):
+                                            if not require_user():
+                                                return
                                             with ui.dialog() as dlg, ui.card().classes(
                                                 "items-center gap-4"
                                             ).style(
@@ -716,6 +737,8 @@ def register():
                                                     )
 
                                                     def do_delete():
+                                                        if not require_user():
+                                                            return
                                                         dlg.close()
                                                         pa = (
                                                             ctx.project_auth
@@ -803,6 +826,8 @@ def register():
                                     db_name=new_db_name,
                                     db_password=new_db_password,
                                 ):
+                                    if not require_user():
+                                        return
                                     if db_name.value:
                                         from webduck.storage.engine import RESERVED_DUCKDB_NAMES
                                         if db_name.value.lower() in RESERVED_DUCKDB_NAMES:

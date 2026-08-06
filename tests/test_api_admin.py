@@ -186,6 +186,36 @@ class TestUsers:
         )
         assert resp.status_code == 200
 
+    def test_delete_user_removes_query_history(
+        self, fastapi_client, auth_token, shared_storage, monkeypatch
+    ):
+        h = self._auth_header(auth_token)
+        # Wire the page-context storage so remove_user_data can find the
+        # preferences/history files (set at startup in production).
+        from webduck.pages import context
+        monkeypatch.setattr(context, "storage", shared_storage)
+
+        fastapi_client.post(
+            "/admin/users",
+            json={"username": "mike", "password": "pass"},
+            headers=h,
+        )
+        from webduck.pages import user_prefs
+        user_prefs._save_prefs(
+            {"mike": {"query_project": "proj"}, "anna": {"query_project": "proj"}}
+        )
+        user_prefs._save_history(
+            {"mike": {"proj": {"sales": ["SELECT 1"]}}, "anna": {"proj": {"x": ["SELECT 2"]}}}
+        )
+
+        resp = fastapi_client.delete("/admin/users/mike", headers=h)
+        assert resp.status_code == 200
+
+        # The deleted user's namespace is gone from prefs and query history,
+        # while other users stay untouched.
+        assert user_prefs._load_prefs() == {"anna": {"query_project": "proj"}}
+        assert user_prefs._load_history() == {"anna": {"proj": {"x": ["SELECT 2"]}}}
+
     def test_cannot_delete_self(self, fastapi_client, auth_token):
         h = self._auth_header(auth_token)
         resp = fastapi_client.delete("/admin/users/admin", headers=h)

@@ -26,7 +26,6 @@ browser download via a download token.
 import asyncio
 from pathlib import Path
 
-from nicegui import app as nicegui_app
 from nicegui import ui
 
 from webduck.pages import context as ctx
@@ -40,6 +39,7 @@ from webduck.pages.ui_helpers import (
     make_drawer,
     make_footer,
     make_header,
+    require_user,
 )
 from webduck.pages.user_prefs import get_user_pref, set_user_pref
 
@@ -54,9 +54,9 @@ def register():
         apply_dark_theme()
         ui.page_title(f"WebDuck {ctx.version} — Import/Export")
 
-        # Auth guard: redirect to login if no session token exists.
-        if "token" not in nicegui_app.storage.user:
-            ui.navigate.to("/login")
+        # Auth guard: redirect to login if the session is invalid or the
+        # user account no longer exists (e.g. deleted while logged in).
+        if not require_user():
             return
 
         make_header(_)
@@ -138,6 +138,8 @@ def register():
                 Only one file is active at a time. A second file
                 is silently rejected.
                 """
+                if not require_user():
+                    return
                 if _uploaded_file[0]:
                     return
                 import os
@@ -201,6 +203,8 @@ def register():
                    clean up the temp file.
                 5. Display success/error and reset the upload zone on success.
                 """
+                if not require_user():
+                    return
                 if not database_select.value:
                     ui.notify(_("select_database"), type="warning")
                     return
@@ -320,6 +324,8 @@ def register():
                    to ``/export/<token>`` — no base64, no WebSocket.
                 5. Clean up the temp file after a short delay.
                 """
+                if not require_user():
+                    return
                 if not database_select.value:
                     ui.notify(_("select_database"), type="warning")
                     return

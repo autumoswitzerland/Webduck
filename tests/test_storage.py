@@ -430,6 +430,25 @@ class TestTrash:
         assert storage.list_trash() == []
         assert not storage.trash_dir.exists()
 
+    def test_delete_single_trash_entry(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        storage.create_project("q")
+        storage.create_database("q", "db2")
+        storage.trash_database("p", "db")
+        storage.trash_project("q")
+
+        entries = storage.list_trash()
+        db_entry = [e for e in entries if e["type"] == "database"][0]
+        assert storage.delete_trash_entry(db_entry["name"]) is True
+        assert storage.delete_trash_entry(db_entry["name"]) is False
+        assert len(storage.list_trash()) == 1
+        assert storage.list_trash()[0]["type"] == "project"
+
+    def test_delete_single_trash_entry_missing_is_false(self, storage, tmp_data):
+        (tmp_data / "p").mkdir()
+        assert storage.delete_trash_entry("nonexistent") is False
+
     def test_trash_database_recreates_missing_project(self, storage, tmp_data):
         (tmp_data / "p").mkdir()
         storage.create_database("p", "db")

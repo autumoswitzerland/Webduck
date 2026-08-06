@@ -477,3 +477,18 @@ msgstr "Weiter"
 
 msgid "deleted_at"
 msgstr "Gelöscht am"
+
+msgid "delete_permanently"
+msgstr "Endgültig löschen"
+
+msgid "confirm_delete_permanently_db"
+msgstr "Datenbank '{0}' in Projekt '{1}' endgültig löschen?"
+
+msgid "confirm_delete_permanently_project"
+msgstr "Projekt '{0}' endgültig löschen?"
+
+msgid "confirm_delete_permanently_hint"
+msgstr "Das Objekt wird unwiderruflich entfernt. Dies kann nicht rückgängig gemacht werden."
+
+msgid "deleted_permanently"
+msgstr "Endgültig gelöscht."

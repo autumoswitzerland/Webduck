@@ -26,7 +26,6 @@ or view displays its rows in a Quasar table with:
 import asyncio
 import json
 
-from nicegui import app as nicegui_app
 from nicegui import ui
 
 from webduck.pages import context as ctx
@@ -44,6 +43,7 @@ from webduck.pages.ui_helpers import (
     make_drawer,
     make_footer,
     make_header,
+    require_user,
 )
 from webduck.pages.user_prefs import get_user_pref, set_user_pref
 
@@ -68,9 +68,9 @@ def register():
         apply_dark_theme()
         ui.page_title(f"WebDuck {ctx.version} — Browse")
 
-        # Auth guard: redirect to login if no session token exists.
-        if "token" not in nicegui_app.storage.user:
-            ui.navigate.to("/login")
+        # Auth guard: redirect to login if the session is invalid or the
+        # user account no longer exists (e.g. deleted while logged in).
+        if not require_user():
             return
 
         make_header(_)
@@ -397,6 +397,8 @@ def register():
                                     event listener.  The flag avoids unnecessary server
                                     calls when the user hasn't scrolled far enough.
                                     """
+                                    if not require_user():
+                                        return
                                     if loading[0] or done[0]:
                                         return
                                     loading[0] = True
@@ -576,6 +578,8 @@ def register():
                                     an edit dialog, and (on save) executes a parameterized
                                     UPDATE with CAST to ensure type safety.
                                     """
+                                    if not require_user():
+                                        return
                                     info = (
                                         await ui.run_javascript(
                                             "window._eci || null",
@@ -649,6 +653,8 @@ def register():
                                                 - TIMESTAMP: YYYY-MM-DD HH:MM or YYYY-MM-DDTHH:MM
                                                 - VARCHAR/UUID: any string (no validation)
                                                 """
+                                                if not require_user():
+                                                    return
                                                 nv = inp.value
                                                 if nv == ov:
                                                     dlg.close()

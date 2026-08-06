@@ -53,6 +53,28 @@ def do_logout():
     ui.navigate.to("/login")
 
 
+def require_user() -> bool:
+    """Enforce a valid, still-existing session user; redirect to login otherwise.
+
+    Returns ``True`` when the session holds a token for a username that still
+    exists in the auth manager.  Otherwise the session is cleared and the
+    browser is redirected to the login page — a deleted user must not be able
+    to keep using the GUI (e.g. execute queries or write history from an
+    already-open page).
+    """
+    user = nicegui_app.storage.user
+    username = user.get("username", "")
+    if (
+        not user.get("token")
+        or not username
+        or ctx.auth is None
+        or not ctx.auth.user_exists(username)
+    ):
+        do_logout()
+        return False
+    return True
+
+
 def make_header(_, page_title: str = ""):
     """Build the shared top header bar.
 
