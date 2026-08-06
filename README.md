@@ -253,6 +253,7 @@ FastAPI ──┬── /admin/*   (JWT auth)    → Project/DB management
 
 - **Storage:** DuckDB files in `data/<project>/<database>.duckdb`
 - **Project order:** Persisted in `data/.projects.json`
+- **Reserved name:** `trash` is reserved for the soft-delete trash directory — a project directory named `trash` is not listed as a project
 - **Auth:** Admin passwords in `data/.users.json` (bcrypt), DB passwords in `data/<project>/.project.json`
 - **User preferences:** Stored in `data/.user_preferences.json`
 - **Logging:** Rotated log files in `log/` (configurable), independent console logging
@@ -268,7 +269,7 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Run tests
-pytest tests/ -v
+pytest tests/
 
 # Run linter
 ruff check src/ tests/

@@ -58,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trash.
 
 ### Changed
+- The project name `trash` is reserved for the soft-delete trash directory
+  since 1.4.0; upgrading installations that already have a project named
+  `trash` no longer list it as a project.
 - Query history is now removed in a targeted way only when a project/database
   is permanently deleted — periodic pruning was removed. Final deletes
   (permanent delete in the trash, emptying the trash, REST hard-delete) clean

@@ -4,7 +4,7 @@ rootdir: /Users/Mike/Development/git-ext/WebDuck
 configfile: pyproject.toml
 plugins: asyncio-1.4.0, anyio-4.14.2
 asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 143 items
+collected 208 items
 
 tests/test_api_admin.py   PASS  test_login_success
 .  PASS  test_login_wrong_password
@@ -22,8 +22,9 @@ tests/test_api_admin.py   PASS  test_login_success
 .  PASS  test_list_users
 .  PASS  test_create_user
 .  PASS  test_delete_user
+.  PASS  test_delete_user_removes_query_history
 .  PASS  test_cannot_delete_self
-.                                [ 11%]
+.                               [  8%]
 tests/test_api_db.py   PASS  test_select
 .  PASS  test_invalid_sql
 .  PASS  test_query_nonexistent_db
@@ -34,7 +35,10 @@ tests/test_api_db.py   PASS  test_select
 .  PASS  test_list_tables
 .  PASS  test_list_projects
 .  PASS  test_list_databases
-.                                          [ 18%]
+.  PASS  test_db_accesses_count_traffic
+.  PASS  test_metadata_endpoints_not_counted
+.  PASS  test_unauthorized_access_not_counted
+.                                       [ 14%]
 tests/test_auth.py   PASS  test_create_and_verify_user
 .  PASS  test_create_duplicate_user
 .  PASS  test_verify_wrong_password
@@ -51,12 +55,20 @@ tests/test_auth.py   PASS  test_create_and_verify_user
 .  PASS  test_read_access_grants_write
 .  PASS  test_read_does_not_grant_write
 .  PASS  test_nonexistent_project
-.                                      [ 30%]
+.  PASS  test_remove_database_password
+.  PASS  test_remove_database_password_keeps_other_entries
+.  PASS  test_remove_database_password_nonexistent
+.                                   [ 24%]
 tests/test_config.py   PASS  test_default_config
 .  PASS  test_load_nonexistent_returns_defaults
 .  PASS  test_save_and_load_roundtrip
 .  PASS  test_save_config_serializes_path
-.                                                [ 32%]
+.                                                [ 25%]
+tests/test_dashboard_footer.py   PASS  test_footer_total_line_only_with_rows
+.  PASS  test_footer_trash_line_only_when_trash_present
+.  PASS  test_footer_both_lines_when_rows_and_trash
+.  PASS  test_footer_empty_when_no_rows_and_no_trash
+.                                      [ 27%]
 tests/test_full_api.py   PASS  test_login
 .  PASS  test_login_wrong_password
 .  PASS  test_login_nonexistent
@@ -103,7 +115,7 @@ tests/test_full_api.py   PASS  test_login
 .  PASS  test_delete_remaining
 .  PASS  test_health
 .  PASS  test_parallel_reads_over_http
-.    [ 65%]
+.    [ 50%]
 tests/test_logging.py   PASS  test_logging_disabled_by_default
 .  PASS  test_logging_enabled_creates_file
 .  PASS  test_log_query_does_nothing_when_disabled
@@ -111,7 +123,7 @@ tests/test_logging.py   PASS  test_logging_disabled_by_default
 .  PASS  test_log_query_error
 .  PASS  test_rotation_config
 .  PASS  test_get_logger_returns_consistent_instance
-.                                            [ 69%]
+.                                            [ 53%]
 tests/test_sql_upload.py   PASS  test_all_statements_succeed
 .  PASS  test_statement_count
 .  PASS  test_tables_created
@@ -133,7 +145,7 @@ tests/test_sql_upload.py   PASS  test_all_statements_succeed
 .  PASS  test_stop_on_first_error
 .  PASS  test_empty_sql_returns_empty
 .  PASS  test_whitespace_only_sql
-.                           [ 84%]
+.                           [ 63%]
 tests/test_storage.py   PASS  test_list_projects_empty
 .  PASS  test_create_and_list_databases
 .  PASS  test_create_duplicate_database
@@ -156,8 +168,63 @@ tests/test_storage.py   PASS  test_list_projects_empty
 .  PASS  test_compact_database_with_foreign_keys
 .  PASS  test_compact_database_missing
 .  PASS  test_compact_database_self_referential_fk
-.                             [100%]
+.  PASS  test_fragmentation_missing_database
+.  PASS  test_fragmentation_fresh_database
+.  PASS  test_fragmentation_after_drop_table
+.  PASS  test_trash_and_restore_database
+.  PASS  test_trash_and_restore_project
+.  PASS  test_trash_project_lists_contained_databases
+.  PASS  test_trash_project_strips_credentials
+.  PASS  test_trash_restore_conflict
+.  PASS  test_empty_trash
+.  PASS  test_delete_single_trash_entry
+.  PASS  test_delete_single_trash_entry_missing_is_false
+.  PASS  test_trash_database_recreates_missing_project
+.  PASS  test_trash_dir_not_listed_as_project
+.  PASS  test_create_project_trash_name_blocked
+.  PASS  test_record_increments_series
+.  PASS  test_bucket_distribution
+.  PASS  test_old_events_pruned
+.  PASS  test_gui_traffic_not_counted
+.           [ 82%]
+tests/test_user_prefs.py   PASS  test_inserts_newest_first
+.  PASS  test_skips_consecutive_duplicate
+.  PASS  test_keeps_only_max_entries
+.  PASS  test_dedup_still_trims
+.  PASS  test_drops_project_and_database_when_project_deleted
+.  PASS  test_drops_database_when_db_deleted_but_project_kept
+.  PASS  test_keeps_valid_references
+.  PASS  test_keeps_unknown_keys
+.  PASS  test_same_db_name_dropped_when_not_in_target_project
+.  PASS  test_all_views_pruned
+.  PASS  test_removes_single_database_keeps_others
+.  PASS  test_removes_whole_project_without_database
+.  PASS  test_removes_project_across_all_users
+.  PASS  test_cascades_empty_projects_and_users
+.  PASS  test_leaves_unrelated_users_untouched
+.  PASS  test_no_change_when_target_missing
+.  PASS  test_no_change_when_project_missing
+.  PASS  test_prunes_deleted_project_from_prefs
+.  PASS  test_prunes_deleted_database_keeps_project
+.  PASS  test_does_not_write_when_nothing_stale
+.  PASS  test_prune_does_not_touch_query_history
+.  PASS  test_drops_project_that_is_fully_gone
+.  PASS  test_drops_database_that_is_fully_gone
+.  PASS  test_keeps_live_project_and_database
+.  PASS  test_keeps_history_for_trashed_database
+.  PASS  test_keeps_whole_trashed_project
+.  PASS  test_mixed_scenario
+.  PASS  test_cascades_empty_users
+.  PASS  test_leaves_unrelated_users_untouched
+.  PASS  test_removes_history_for_fully_deleted_objects
+.  PASS  test_does_not_write_when_nothing_stale
+.  PASS  test_removes_database_history
+.  PASS  test_removes_whole_project_history
+.  PASS  test_does_not_write_when_nothing_to_remove
+.  PASS  test_removes_user_from_prefs_and_history
+.  PASS  test_missing_user_is_noop
+.            [100%]
 
-  143/143 tests passed
+  208/208 tests passed
 
-============================= 143 passed in 46.30s =============================
+============================= 208 passed in 52.23s =============================
