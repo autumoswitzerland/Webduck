@@ -14,7 +14,7 @@
   <br><br>
   <a href="https://webduck.autumo.ch">Website</a> · 
   <a href="https://github.com/autumoswitzerland/Webduck/issues">Issues</a> · 
-  <a href="https://github.com/autumoswitzerland/Webduck/blob/main/LICENSE">License</a>
+  <a href="https://github.com/autumoswitzerland/Webduck/blob/master/LICENSE">License</a>
 </div>
 
 ## Features
@@ -63,7 +63,7 @@ pip install webduck
 
 ```bash
 # Download docker-compose.yml
-curl -O https://raw.githubusercontent.com/autumoswitzerland/Webduck/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/autumoswitzerland/Webduck/master/docker-compose.yml
 
 # Set password
 export WEBDUCK_ADMIN_PASS=mypassword
