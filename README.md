@@ -140,6 +140,12 @@ server:
   max_upload_mb: 256
 ```
 
+> **Security note:** Before deploying WebDuck in production, replace
+> `jwt_secret` in `webduck.yaml` with a long, random secret (e.g. generated
+> with `openssl rand -base64 48`). The placeholder value
+> `CHANGE-ME-TO-A-SECRET-KEY-IN-PRODUCTION` must never be used in
+> production — anyone who knows the secret can forge admin tokens.
+
 ## Web UI Pages
 
 | Page | URL | Description |
@@ -156,7 +162,9 @@ server:
 
 ### Admin API (JWT protected)
 
-All admin endpoints require `Authorization: Bearer <jwt_token>`.
+All admin endpoints require `Authorization: Bearer <jwt_token>`. Tokens are
+signed with the `jwt_secret` from `webduck.yaml` — make sure you replaced the
+placeholder before going to production (see the security note above).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
