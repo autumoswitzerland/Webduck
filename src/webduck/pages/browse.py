@@ -28,6 +28,7 @@ import json
 
 from nicegui import ui
 
+from webduck.auth.manager import ProjectAuth
 from webduck.pages import context as ctx
 from webduck.pages.context import (
     BG_CARD,
@@ -516,18 +517,34 @@ def register():
                                 for row in type_res["rows"]:
                                     col_types[row[0]] = row[1]
 
-                            # CSS highlight on cell hover to indicate editability.
+                            # CSS highlight on cell hover: the yellow background
+                            # marks "clickable" cells on every table (views and
+                            # protected DBs too), but the hand cursor only on
+                            # actually editable tables (see .wd-editable below).
                             ui.add_css("""
                                 .q-table tbody td:hover {
                                     background: rgba(255,213,79,0.1)
                                         !important;
+                                }
+                                .q-table.wd-editable tbody td:hover {
                                     cursor: pointer;
                                 }
                             """)
 
                             # Use the first column as the primary key for UPDATE statements.
                             pk_col = columns[0] if columns else None
-                            if pk_col and pk_col in col_types:
+                            # Write-protected databases are read-only: disable
+                            # inline cell editing entirely (no dblclick handler,
+                            # no polling). Views are never editable either.
+                            # The hover highlight stays on every table — it only
+                            # marks cells as "clickable", not as "editable".
+                            _pa = ctx.project_auth or ProjectAuth(ctx.storage.data_dir)
+                            _editable = bool(
+                                pk_col and pk_col in col_types
+                                and obj_type != "views"
+                            ) and not _pa.is_database_write_protected(proj, db)
+                            if _editable:
+                                tbl.classes("wd-editable")
                                 # JS double-click handler: captures the clicked row index,
                                 # column name, and old value, storing them in a global.
                                 ui.run_javascript("""
@@ -579,6 +596,16 @@ def register():
                                     UPDATE with CAST to ensure type safety.
                                     """
                                     if not require_user():
+                                        return
+                                    # Defense in depth: a protected database
+                                    # must never open the edit dialog, even if
+                                    # a stale dblclick event arrived before a
+                                    # database switch.
+                                    _pa = ctx.project_auth or ProjectAuth(ctx.storage.data_dir)
+                                    if _pa.is_database_write_protected(proj, db):
+                                        ui.run_javascript(
+                                            "window._eci = null"
+                                        )
                                         return
                                     info = (
                                         await ui.run_javascript(

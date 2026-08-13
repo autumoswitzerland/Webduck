@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-08-13
+
+### Added
+- Per-database write protection: a database can be locked to read-only via a
+  new icon button in the projects view (amber when active) or the REST API
+  (`PUT /admin/projects/{project}/databases/{db}/write-protection`). Write
+  protection is   independent of passwords — passwords control *who* may access
+  a database, the flag controls *what* may be done to its data. Protected
+  databases are always opened read-only by the storage engine, so SQL
+  DML/DDL and imports are rejected; reads and exports still work. Compaction
+  and password management remain available — they are maintenance
+  operations, not data writes.
+  The flag is stored in `data/<project>/.project.json`.
+
 ## [1.4.0] - 2026-08-05
 
 ### Added

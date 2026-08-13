@@ -172,6 +172,18 @@ msgstr "Die Datenbank war bereits kompakt — es konnte kein Speicherplatz zurü
 msgid "compress_grew"
 msgstr "Die Datenbank war bereits kompakt und ist beim erneuten Schreiben leicht angewachsen ({0} → {1}, +{2}%). Es gingen keine Daten verloren — beim Neuschreiben verteilt DuckDB die Daten minimal anders auf ihre Speicherblöcke, das ist normal."
 
+msgid "write_protection"
+msgstr "Schreibschutz (nur lesen)"
+
+msgid "write_protection_on"
+msgstr "Schreibschutz aktiviert. Die Datenbank kann jetzt nur noch gelesen werden."
+
+msgid "write_protection_off"
+msgstr "Schreibschutz aufgehoben. Die Datenbank ist wieder beschreibbar."
+
+msgid "write_protection_hint"
+msgstr "Die Datenbank ist schreibgeschützt (nur lesen). Schreiboperationen sind blockiert."
+
 # SQL Editor
 msgid "sql_editor"
 msgstr "SQL Abfragen"

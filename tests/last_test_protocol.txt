@@ -4,7 +4,7 @@ rootdir: /Users/Mike/Development/git-ext/WebDuck
 configfile: pyproject.toml
 plugins: asyncio-1.4.0, anyio-4.14.2
 asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 208 items
+collected 229 items
 
 tests/test_api_admin.py   PASS  test_login_success
 .  PASS  test_login_wrong_password
@@ -19,16 +19,22 @@ tests/test_api_admin.py   PASS  test_login_success
 .  PASS  test_list_databases
 .  PASS  test_delete_database
 .  PASS  test_set_database_password
+.  PASS  test_enable_write_protection
+.  PASS  test_disable_write_protection
+.  PASS  test_write_protection_requires_auth
 .  PASS  test_list_users
 .  PASS  test_create_user
 .  PASS  test_delete_user
 .  PASS  test_delete_user_removes_query_history
 .  PASS  test_cannot_delete_self
-.                               [  8%]
+.                            [  9%]
 tests/test_api_db.py   PASS  test_select
 .  PASS  test_invalid_sql
 .  PASS  test_query_nonexistent_db
 .  PASS  test_ddl_and_dml
+.  PASS  test_write_blocked_on_protected
+.  PASS  test_read_allowed_on_protected
+.  PASS  test_import_blocked_on_protected
 .  PASS  test_no_project_key_no_password
 .  PASS  test_wrong_password
 .  PASS  test_password_set_no_header
@@ -38,7 +44,7 @@ tests/test_api_db.py   PASS  test_select
 .  PASS  test_db_accesses_count_traffic
 .  PASS  test_metadata_endpoints_not_counted
 .  PASS  test_unauthorized_access_not_counted
-.                                       [ 14%]
+.                                    [ 16%]
 tests/test_auth.py   PASS  test_create_and_verify_user
 .  PASS  test_create_duplicate_user
 .  PASS  test_verify_wrong_password
@@ -58,17 +64,22 @@ tests/test_auth.py   PASS  test_create_and_verify_user
 .  PASS  test_remove_database_password
 .  PASS  test_remove_database_password_keeps_other_entries
 .  PASS  test_remove_database_password_nonexistent
-.                                   [ 24%]
+.  PASS  test_write_protection_roundtrip
+.  PASS  test_write_protection_defaults_false
+.  PASS  test_write_protection_persists
+.  PASS  test_remove_password_keeps_write_protection
+.  PASS  test_remove_database_config_entry_clears_write_protection
+.                              [ 26%]
 tests/test_config.py   PASS  test_default_config
 .  PASS  test_load_nonexistent_returns_defaults
 .  PASS  test_save_and_load_roundtrip
 .  PASS  test_save_config_serializes_path
-.                                                [ 25%]
+.                                                [ 28%]
 tests/test_dashboard_footer.py   PASS  test_footer_total_line_only_with_rows
 .  PASS  test_footer_trash_line_only_when_trash_present
 .  PASS  test_footer_both_lines_when_rows_and_trash
 .  PASS  test_footer_empty_when_no_rows_and_no_trash
-.                                      [ 27%]
+.                                      [ 30%]
 tests/test_full_api.py   PASS  test_login
 .  PASS  test_login_wrong_password
 .  PASS  test_login_nonexistent
@@ -88,6 +99,10 @@ tests/test_full_api.py   PASS  test_login
 .  PASS  test_query_wrong_key_rejected
 .  PASS  test_query_correct_key
 .  PASS  test_open_db_no_password
+.  PASS  test_enable_write_protection
+.  PASS  test_write_blocked_while_protected
+.  PASS  test_read_allowed_while_protected
+.  PASS  test_disable_write_protection
 .  PASS  test_create_table
 .  PASS  test_verify_table_gui
 .  PASS  test_select_all
@@ -114,8 +129,9 @@ tests/test_full_api.py   PASS  test_login
 .  PASS  test_verify_project_deleted_gui
 .  PASS  test_delete_remaining
 .  PASS  test_health
-.  PASS  test_parallel_reads_over_http
-.    [ 50%]
+. [ 51%]
+  PASS  test_parallel_reads_over_http
+.                                                                        [ 51%]
 tests/test_logging.py   PASS  test_logging_disabled_by_default
 .  PASS  test_logging_enabled_creates_file
 .  PASS  test_log_query_does_nothing_when_disabled
@@ -123,7 +139,7 @@ tests/test_logging.py   PASS  test_logging_disabled_by_default
 .  PASS  test_log_query_error
 .  PASS  test_rotation_config
 .  PASS  test_get_logger_returns_consistent_instance
-.                                            [ 53%]
+.                                            [ 55%]
 tests/test_sql_upload.py   PASS  test_all_statements_succeed
 .  PASS  test_statement_count
 .  PASS  test_tables_created
@@ -145,7 +161,7 @@ tests/test_sql_upload.py   PASS  test_all_statements_succeed
 .  PASS  test_stop_on_first_error
 .  PASS  test_empty_sql_returns_empty
 .  PASS  test_whitespace_only_sql
-.                           [ 63%]
+.                           [ 64%]
 tests/test_storage.py   PASS  test_list_projects_empty
 .  PASS  test_create_and_list_databases
 .  PASS  test_create_duplicate_database
@@ -182,11 +198,17 @@ tests/test_storage.py   PASS  test_list_projects_empty
 .  PASS  test_trash_database_recreates_missing_project
 .  PASS  test_trash_dir_not_listed_as_project
 .  PASS  test_create_project_trash_name_blocked
+.  PASS  test_write_protected_rejects_write
+.  PASS  test_write_protected_allows_read
+.  PASS  test_write_protection_can_be_released
+.  PASS  test_compact_allowed_on_write_protected
+.  PASS  test_write_protected_blocks_import
+.  PASS  test_unprotected_import_still_works
 .  PASS  test_record_increments_series
 .  PASS  test_bucket_distribution
 .  PASS  test_old_events_pruned
 .  PASS  test_gui_traffic_not_counted
-.           [ 82%]
+.     [ 84%]
 tests/test_user_prefs.py   PASS  test_inserts_newest_first
 .  PASS  test_skips_consecutive_duplicate
 .  PASS  test_keeps_only_max_entries
@@ -225,6 +247,6 @@ tests/test_user_prefs.py   PASS  test_inserts_newest_first
 .  PASS  test_missing_user_is_noop
 .            [100%]
 
-  208/208 tests passed
+  229/229 tests passed
 
-============================= 208 passed in 52.23s =============================
+============================= 229 passed in 57.26s =============================

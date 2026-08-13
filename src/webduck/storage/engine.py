@@ -936,6 +936,18 @@ class StorageEngine:
             pass
         return count
 
+    def _is_write_protected(self, project: str, database: str) -> bool:
+        """Check whether a database is write-protected (read-only).
+
+        Write protection is stored per-database in the project config
+        (``databases.<db>.write_protected``) by ProjectAuth. The engine
+        consults this flag so a protected database can never be opened
+        for writing — regardless of which code path tries it.
+        """
+        from webduck.auth.manager import ProjectAuth
+
+        return ProjectAuth(self.data_dir).is_database_write_protected(project, database)
+
     def execute_query(
         self,
         project: str,
@@ -959,6 +971,14 @@ class StorageEngine:
                 "success": False,
                 "error": f"Database not found: {project}/{database}",
             }
+
+        # Write protection is enforced at the connection level: a protected
+        # database is always opened read-only, regardless of the requested
+        # mode. DuckDB then rejects any DML/DDL natively (read-only mode).
+        # Read operations — including COPY TO exports, which only write to an
+        # external file — remain allowed.
+        if not read_only and self._is_write_protected(project, database):
+            read_only = True
 
         lock = self._get_lock(str(db_path))
         with (lock.read() if read_only else lock.write()):

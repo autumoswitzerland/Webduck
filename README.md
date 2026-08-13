@@ -7,7 +7,7 @@
   a ready-to-use administration interface for DuckDB databases and data analytics
   — out of the box, just like the database admin tools that come with any hosting package.
 
-  <img src="https://img.shields.io/badge/version-1.4.0-FFD54F">
+  <img src="https://img.shields.io/badge/version-1.5.0-FFD54F">
   <img src="https://img.shields.io/badge/license-AGPLv3-orange">
   <img src="https://img.shields.io/badge/python-3.11+-blue">
 
@@ -25,6 +25,7 @@
 - **Dashboard** — server status cards, live REST traffic monitor (queries/min, active sessions), storage overview with per-project sizes and trash totals
 - **Trash** — soft-delete projects/databases with restore, permanent delete per entry, empty trash
 - **JWT authentication** for admin API, optional project-key auth for database access
+- **Per-database write protection** — lock a database to read-only, independent of passwords: passwords control *who* may access, write protection controls *what* may be done to the data. It protects the data only — compacting, deleting and managing passwords in the web UI keep working at any time
 - **bcrypt password hashing** (never plaintext)
 - **SQL editor** — multi-statement support with sequential execution, query history (Alt+Up/Alt+Down, Alt+Enter)
 - **SQL upload** — execute multi-statement SQL scripts from files
@@ -152,7 +153,7 @@ server:
 |------|-----|-------------|
 | Login | `/ui/login` | Admin login with language selection |
 | Dashboard | `/ui/dashboard` | Server status, live traffic monitor (queries/min, active sessions), storage overview |
-| Projects | `/ui/projects` | Create/delete projects, manage databases, set passwords, drag & drop reorder, database sizes + compression hint |
+| Projects | `/ui/projects` | Create/delete projects, manage databases, set passwords, write protection, drag & drop reorder, database sizes + compression hint |
 | Queries | `/ui/query` | SQL editor (multi-statement) + SQL file upload, query history (Alt+Up/Alt+Down) |
 | Browse | `/ui/browse` | Tree navigation, table/view browsing with infinite scroll, cell editing |
 | Import/Export | `/ui/import` | CSV, Parquet and JSON import (drag & drop) and export (browser download) |
@@ -177,6 +178,7 @@ placeholder before going to production (see the security note above).
 | `POST` | `/admin/projects/{project}/databases` | Create database |
 | `DELETE` | `/admin/projects/{project}/databases/{db}` | Delete database |
 | `PUT` | `/admin/projects/{project}/databases/{db}/password` | Set database password |
+| `PUT` | `/admin/projects/{project}/databases/{db}/write-protection` | Enable/disable write protection (read-only) |
 | `GET` | `/admin/users` | List admin users |
 | `POST` | `/admin/users` | Create admin user |
 | `DELETE` | `/admin/users/{username}` | Delete admin user |
@@ -263,6 +265,7 @@ FastAPI ──┬── /admin/*   (JWT auth)    → Project/DB management
 - **Project order:** Persisted in `data/.projects.json`
 - **Reserved name:** `trash` is reserved for the soft-delete trash directory — a project directory named `trash` is not listed as a project
 - **Auth:** Admin passwords in `data/.users.json` (bcrypt), DB passwords in `data/<project>/.project.json`
+- **Write protection:** Per-database read-only flag in `data/<project>/.project.json`; a protected database is always opened read-only by the engine
 - **User preferences:** Stored in `data/.user_preferences.json`
 - **Logging:** Rotated log files in `log/` (configurable), independent console logging
 - **Concurrency:** Per-file reader-writer locks — parallel reads, exclusive writes (DuckDB single-writer model)

@@ -172,6 +172,18 @@ msgstr "The database was already compact — no space could be reclaimed."
 msgid "compress_grew"
 msgstr "The database was already compact and grew slightly when it was rewritten ({0} → {1}, +{2}%). No data was lost — rewriting distributes the data slightly differently across DuckDB's storage blocks, which is normal."
 
+msgid "write_protection"
+msgstr "Write protection (read-only)"
+
+msgid "write_protection_on"
+msgstr "Write protection enabled. The database can now only be read."
+
+msgid "write_protection_off"
+msgstr "Write protection removed. The database is writable again."
+
+msgid "write_protection_hint"
+msgstr "This database is write-protected (read-only). Write operations are blocked."
+
 # SQL Editor
 msgid "sql_editor"
 msgstr "SQL Queries"

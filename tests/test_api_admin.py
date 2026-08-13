@@ -155,6 +155,51 @@ class TestPassword:
         assert resp.json()["success"] is True
 
 
+class TestWriteProtection:
+    def _auth_header(self, token):
+        return {"Authorization": f"Bearer {token}"}
+
+    def _create_db(self, client, token, name="db1"):
+        h = self._auth_header(token)
+        client.post("/admin/projects", json={"name": "p"}, headers=h)
+        client.post("/admin/projects/p/databases", json={"name": name}, headers=h)
+
+    def test_enable_write_protection(self, fastapi_client, auth_token):
+        h = self._auth_header(auth_token)
+        self._create_db(fastapi_client, auth_token)
+        resp = fastapi_client.put(
+            "/admin/projects/p/databases/db1/write-protection",
+            json={"protected": True},
+            headers=h,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        assert "enabled" in resp.json()["message"]
+
+    def test_disable_write_protection(self, fastapi_client, auth_token):
+        h = self._auth_header(auth_token)
+        self._create_db(fastapi_client, auth_token)
+        fastapi_client.put(
+            "/admin/projects/p/databases/db1/write-protection",
+            json={"protected": True},
+            headers=h,
+        )
+        resp = fastapi_client.put(
+            "/admin/projects/p/databases/db1/write-protection",
+            json={"protected": False},
+            headers=h,
+        )
+        assert resp.status_code == 200
+        assert "disabled" in resp.json()["message"]
+
+    def test_write_protection_requires_auth(self, fastapi_client):
+        resp = fastapi_client.put(
+            "/admin/projects/p/databases/db1/write-protection",
+            json={"protected": True},
+        )
+        assert resp.status_code in (401, 403)
+
+
 class TestUsers:
     def _auth_header(self, token):
         return {"Authorization": f"Bearer {token}"}

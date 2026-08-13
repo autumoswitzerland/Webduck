@@ -223,6 +223,13 @@ async def execute_write(
         log_error("execute_write: Project auth not initialized")
         raise HTTPException(status_code=500, detail="Project auth not initialized")
 
+    if project_auth.is_database_write_protected(project, database):
+        log_warning(f"execute_write: Write-protected database '{project}/{database}'")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Database is write-protected (read-only)",
+        )
+
     if not project_auth.has_database_access(project, database, password, "write"):
         log_warning(f"execute_write: Write access denied for '{project}/{database}'")
         raise HTTPException(
@@ -325,6 +332,13 @@ async def import_file(
     if not project_auth:
         log_error("import: Project auth not initialized")
         raise HTTPException(status_code=500, detail="Project auth not initialized")
+
+    if project_auth.is_database_write_protected(project, database):
+        log_warning(f"import: Write-protected database '{project}/{database}'")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Database is write-protected (read-only)",
+        )
 
     if not project_auth.has_database_access(project, database, password, "write"):
         log_warning(f"import: Write access denied for '{project}/{database}'")

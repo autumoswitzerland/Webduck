@@ -130,6 +130,17 @@ class PasswordRequest(BaseModel):
     access_level: str = "read"
 
 
+class WriteProtectionRequest(BaseModel):
+    """Request to set the write-protection (read-only) flag of a database.
+
+    Write protection is independent of passwords: it answers *what* may be
+    done to a database, while passwords answer *who* may access it. A
+    protected database is always opened read-only, so no data can be
+    modified even with valid write credentials.
+    """
+    protected: bool
+
+
 # --- Endpoints ---
 
 @router.post("/login", response_model=LoginResponse)
@@ -296,6 +307,13 @@ async def delete_database(
     from webduck.pages.user_prefs import remove_query_history
     remove_query_history(project, database)
 
+    # Remove the database's complete config entry (passwords and the
+    # write-protection flag) — a deleted database has no attributes left.
+    from webduck.auth.manager import ProjectAuth
+    ProjectAuth(storage_engine.data_dir).remove_database_config_entry(
+        project, database
+    )
+
     return {"success": True, "message": f"Database '{database}' deleted"}
 
 
@@ -327,6 +345,36 @@ async def set_database_password(
         raise HTTPException(status_code=500, detail="Failed to set password")
 
     return {"success": True, "message": f"Password set for '{database}' ({req.access_level})"}
+
+
+@router.put("/projects/{project}/databases/{database}/write-protection")
+async def set_database_write_protection(
+    project: str,
+    database: str,
+    req: WriteProtectionRequest,
+    username: str = Depends(verify_admin),
+) -> dict:
+    """Set or clear the write-protection (read-only) flag for a database.
+
+    Protected databases can only be opened read-only by the storage engine:
+    any write attempt (SQL DML/DDL, import, compaction) is rejected. This is
+    a hard guard that applies even to requests with valid write credentials.
+    """
+    from webduck.auth.manager import ProjectAuth
+
+    project_auth = ProjectAuth(storage_engine.data_dir)
+
+    if not await asyncio.to_thread(
+        project_auth.set_database_write_protected, project, database, req.protected
+    ):
+        log_error(
+            f"set_database_write_protection: Failed to set write protection "
+            f"for '{database}' in '{project}'"
+        )
+        raise HTTPException(status_code=500, detail="Failed to set write protection")
+
+    state = "enabled" if req.protected else "disabled"
+    return {"success": True, "message": f"Write protection {state} for '{database}'"}
 
 
 @router.get("/users")

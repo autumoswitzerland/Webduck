@@ -111,9 +111,41 @@ def register():
                         database_select.set_options([], value=None)
 
                 project_select.on_value_change(update_databases)
-                database_select.on_value_change(
-                    lambda: set_user_pref("import", "database", database_select.value) if database_select.value else None
-                )
+                # The upload widget (created further down) is stored in this
+                # list so the DB-change handler can enable/disable it.
+                _upload_ref = [None]
+
+                def update_import_state():
+                    """React to a database change.
+
+                    Persists the selection and — for write-protected
+                    databases — disables the upload widget up front (so no
+                    file is transferred in the first place) and shows the
+                    write-protection hint right in the widget label.  The
+                    check therefore happens before any upload, not after.
+                    """
+                    if database_select.value:
+                        set_user_pref(
+                            "import", "database", database_select.value
+                        )
+                    from webduck.auth.manager import ProjectAuth
+                    _pa = ctx.project_auth or ProjectAuth(ctx.storage.data_dir)
+                    _protected = bool(
+                        database_select.value
+                    ) and _pa.is_database_write_protected(
+                        project_select.value, database_select.value
+                    )
+                    if _upload_ref[0] is not None:
+                        if _protected:
+                            _upload_ref[0].disable()
+                            _upload_ref[0].set_label(
+                                _("write_protection_hint")
+                            )
+                        else:
+                            _upload_ref[0].enable()
+                            _upload_ref[0].set_label(_("drop_file"))
+
+                database_select.on_value_change(update_import_state)
                 update_databases()
 
         # ── Card 2: Import ──────────────────────────────
@@ -140,6 +172,21 @@ def register():
                 """
                 if not require_user():
                     return
+                # Write-protected databases are read-only: reject the file
+                # immediately instead of uploading it first and failing at
+                # the import step.
+                from webduck.auth.manager import ProjectAuth
+                _pa = ctx.project_auth or ProjectAuth(ctx.storage.data_dir)
+                if _pa.is_database_write_protected(
+                    project_select.value, database_select.value
+                ):
+                    ui.notification(
+                        _("write_protection_hint"),
+                        type="negative",
+                        timeout=None,
+                        close_button=True,
+                    )
+                    return
                 if _uploaded_file[0]:
                     return
                 import os
@@ -160,6 +207,11 @@ def register():
                 label=_("drop_file"),
                 multiple=False,
             ).props('removable max-files="1" accept=".csv,.tsv,.txt,.parquet,.json,.jsonl,.ndjson"').classes("w-full")
+
+            # Hand the upload widget to the DB-change handler above and apply
+            # the initial write-protection state once.
+            _upload_ref[0] = upload
+            update_import_state()
 
             # Style the QUploader to match our dark theme.
             ui.add_css("""
@@ -216,6 +268,21 @@ def register():
                 if not _uploaded_file[0]:
                     ui.notify(_("no_file_loaded"), type="warning")
                     return
+
+                # Write-protected databases are read-only: importing a file
+                # would fail.  Show a persistent popup; the technical DuckDB
+                # error still appears in the result area below.
+                from webduck.auth.manager import ProjectAuth
+                _pa = ctx.project_auth or ProjectAuth(ctx.storage.data_dir)
+                if _pa.is_database_write_protected(
+                    project_select.value, database_select.value
+                ):
+                    ui.notification(
+                        _("write_protection_hint"),
+                        type="negative",
+                        timeout=None,
+                        close_button=True,
+                    )
 
                 # Show a modal spinner while the import runs.
                 with ui.dialog() as dlg, ui.card().classes(

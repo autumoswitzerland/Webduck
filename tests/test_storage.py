@@ -473,6 +473,65 @@ class TestTrash:
         assert storage.create_project("trash") is False
 
 
+class TestWriteProtection:
+    def test_write_protected_rejects_write(self, storage, project_auth, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        project_auth.set_database_write_protected("p", "db", True)
+        result = storage.execute_query(
+            "p", "db", "CREATE TABLE t (id INTEGER)", read_only=False
+        )
+        assert result["success"] is False
+        assert "read-only" in result["error"].lower()
+
+    def test_write_protected_allows_read(self, storage, project_auth, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        storage.execute_query(
+            "p", "db", "CREATE TABLE t (id INTEGER); INSERT INTO t VALUES (1)",
+            read_only=False,
+        )
+        project_auth.set_database_write_protected("p", "db", True)
+        result = storage.execute_query("p", "db", "SELECT * FROM t")
+        assert result["success"] is True
+        assert result["rows"] == [[1]]
+
+    def test_write_protection_can_be_released(self, storage, project_auth, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        project_auth.set_database_write_protected("p", "db", True)
+        project_auth.set_database_write_protected("p", "db", False)
+        result = storage.execute_query(
+            "p", "db", "CREATE TABLE t (id INTEGER)", read_only=False
+        )
+        assert result["success"] is True
+
+    def test_compact_allowed_on_write_protected(self, storage, project_auth, tmp_data):
+        """Compaction is a maintenance op, not a data write — always allowed."""
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        project_auth.set_database_write_protected("p", "db", True)
+        result = storage.compact_database("p", "db")
+        assert result["success"] is True
+
+    def test_write_protected_blocks_import(self, storage, project_auth, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        project_auth.set_database_write_protected("p", "db", True)
+        csv_path = tmp_data / "data.csv"
+        csv_path.write_text("id\n1\n")
+        result = storage.import_csv("p", "db", "t", csv_path)
+        assert result["success"] is False
+
+    def test_unprotected_import_still_works(self, storage, project_auth, tmp_data):
+        (tmp_data / "p").mkdir()
+        storage.create_database("p", "db")
+        csv_path = tmp_data / "data.csv"
+        csv_path.write_text("id\n1\n")
+        result = storage.import_csv("p", "db", "t", csv_path)
+        assert result["success"] is True
+
+
 class TestTrafficCounter:
     def test_record_increments_series(self, storage):
         assert storage.db_access_series(60, 2) == [0] * 30

@@ -260,26 +260,105 @@ class ProjectAuth:
         db_config = config.get("databases", {}).get(database, {})
         return bool(db_config.get("read_password_hash") or db_config.get("write_password_hash"))
 
-    def remove_database_password(self, project: str, database: str) -> bool:
-        """Remove all password hashes for a database.
+    def is_database_write_protected(self, project: str, database: str) -> bool:
+        """Check if a database is write-protected (read-only).
 
-        Called when a database is deleted (moved to trash) so that no
-        credential for the deleted database survives in the project config.
-        Returns True if an entry was removed, False if the database had no
-        stored credentials (or the project config does not exist).
+        Write protection is independent of passwords: passwords answer
+        *who* may access a database, the write-protect flag answers *what*
+        may be done to it. A protected database can only be opened
+        read-only, so the data is safe from accidental or malicious
+        modification even with valid credentials.
+        """
+        config = self.get_project_config(project)
+        db_config = config.get("databases", {}).get(database, {})
+        return bool(db_config.get("write_protected"))
+
+    def set_database_write_protected(self, project: str, database: str, protected: bool) -> bool:
+        """Set or clear the write-protection (read-only) flag for a database.
+
+        Stored in the project config as ``databases.<db>.write_protected``.
+        ``True`` makes the database read-only: the storage engine opens it
+        with a read-only DuckDB connection, so any write attempt (SQL DML/
+        DDL, import, compaction) is rejected.
+        """
+        config_path = self._get_project_config_path(project)
+        config = self.get_project_config(project)
+
+        if "databases" not in config:
+            config["databases"] = {}
+        if database not in config["databases"]:
+            config["databases"][database] = {}
+
+        if protected:
+            config["databases"][database]["write_protected"] = True
+        else:
+            config["databases"][database].pop("write_protected", None)
+            # Drop an empty per-database entry so no leftover config remains.
+            if not config["databases"][database]:
+                del config["databases"][database]
+
+        # Ensure the project directory exists before writing config.
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, "w") as f:
+            json.dump(config, f, indent=2)
+        return True
+
+    def remove_database_password(self, project: str, database: str) -> bool:
+        """Remove the password hashes for a database.
+
+        Only the ``*_password_hash`` entries are removed; other per-database
+        settings such as the write-protection flag stay untouched.  Returns
+        True if a hash was removed, False if the database had no stored
+        credentials (or the project config does not exist).
+        """
+        config = self.get_project_config(project)
+        db_config = config.get("databases", {}).get(database, {})
+        removed = False
+        for key in ("read_password_hash", "write_password_hash"):
+            if key in db_config:
+                db_config.pop(key, None)
+                removed = True
+        if not removed:
+            return False
+        self._write_project_config(project, config)
+        return True
+
+    def remove_database_config_entry(self, project: str, database: str) -> bool:
+        """Remove a database's complete config entry.
+
+        Used when a database is deleted (moved to trash) so no credentials
+        or flags for the deleted database survive in the project config.
+        Returns True if the entry existed and was removed.
         """
         config = self.get_project_config(project)
         databases = config.get("databases", {})
         if database not in databases:
             return False
-
         del databases[database]
-        # Drop the whole config file once no databases remain — an empty
-        # .project.json is indistinguishable from a missing one.
         if not databases:
             self._get_project_config_path(project).unlink(missing_ok=True)
         else:
             config["databases"] = databases
-            with open(self._get_project_config_path(project), "w") as f:
+            config_path = self._get_project_config_path(project)
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(config_path, "w") as f:
                 json.dump(config, f, indent=2)
         return True
+
+    def _write_project_config(self, project: str, config: dict) -> None:
+        """Persist a project config, dropping it when fully empty."""
+        databases = config.get("databases", {})
+        # Remove empty per-database entries (only non-config settings like
+        # write_protected keep an entry alive).
+        for name in list(databases):
+            if not databases[name]:
+                del databases[name]
+        if not databases:
+            # An empty .project.json is indistinguishable from a missing one.
+            self._get_project_config_path(project).unlink(missing_ok=True)
+        else:
+            config["databases"] = databases
+            config_path = self._get_project_config_path(project)
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=2)

@@ -415,6 +415,61 @@ class TestPassword:
 
 
 # ===========================================================================
+#  4b. Write protection
+# ===========================================================================
+
+class TestWriteProtection:
+    def test_enable_write_protection(self, client, request):
+        ia = request.config.getoption("--interactive")
+        step("Enable write protection for 'analytics'", ia)
+
+        resp = client.put(
+            "/admin/projects/alpha/databases/analytics/write-protection",
+            json={"protected": True},
+            headers=_auth(),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        print("  Write protection enabled")
+
+    def test_write_blocked_while_protected(self, client, request):
+        ia = request.config.getoption("--interactive")
+        step("Write to 'analytics' while protected (expect 403)", ia)
+
+        resp = client.post(
+            "/db/projects/alpha/databases/analytics/write",
+            json={"sql": "CREATE TABLE t (id INTEGER)"},
+        )
+        assert resp.status_code == 403
+        assert "write-protected" in resp.json()["detail"]
+        print("  Correctly rejected")
+
+    def test_read_allowed_while_protected(self, client, request):
+        ia = request.config.getoption("--interactive")
+        step("Read from 'analytics' while protected (expect 200)", ia)
+
+        resp = client.post(
+            "/db/projects/alpha/databases/analytics/query",
+            json={"sql": "SELECT 2 AS y"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        print("  Read still works")
+
+    def test_disable_write_protection(self, client, request):
+        ia = request.config.getoption("--interactive")
+        step("Disable write protection for 'analytics'", ia)
+
+        resp = client.put(
+            "/admin/projects/alpha/databases/analytics/write-protection",
+            json={"protected": False},
+            headers=_auth(),
+        )
+        assert resp.status_code == 200
+        print("  Write protection disabled")
+
+
+# ===========================================================================
 #  5. SQL
 # ===========================================================================
 

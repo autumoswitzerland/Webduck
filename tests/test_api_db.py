@@ -86,6 +86,57 @@ class TestWrite:
         assert resp.json()["rows"] == [[42]]
 
 
+class TestWriteProtection:
+    def _setup_protected(self, fastapi_client, auth_token, tmp_data):
+        """Create project/db with write password, then enable write protection."""
+        h = {"Authorization": f"Bearer {auth_token}"}
+        fastapi_client.post("/admin/projects", json={"name": "p"}, headers=h)
+        fastapi_client.post("/admin/projects/p/databases", json={"name": "d"}, headers=h)
+        fastapi_client.put(
+            "/admin/projects/p/databases/d/password",
+            json={"password": "dbpass", "access_level": "write"},
+            headers=h,
+        )
+        resp = fastapi_client.put(
+            "/admin/projects/p/databases/d/write-protection",
+            json={"protected": True},
+            headers=h,
+        )
+        assert resp.status_code == 200
+        return {"X-Project-Key": "p:dbpass"}
+
+    def test_write_blocked_on_protected(self, fastapi_client, auth_token, tmp_data):
+        h = self._setup_protected(fastapi_client, auth_token, tmp_data)
+        resp = fastapi_client.post(
+            "/db/projects/p/databases/d/write",
+            json={"sql": "CREATE TABLE t (id INTEGER)"},
+            headers=h,
+        )
+        assert resp.status_code == 403
+        assert "write-protected" in resp.json()["detail"]
+
+    def test_read_allowed_on_protected(self, fastapi_client, auth_token, tmp_data):
+        h = self._setup_protected(fastapi_client, auth_token, tmp_data)
+        resp = fastapi_client.post(
+            "/db/projects/p/databases/d/query",
+            json={"sql": "SELECT 1"},
+            headers=h,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
+    def test_import_blocked_on_protected(self, fastapi_client, auth_token, tmp_data):
+        h = self._setup_protected(fastapi_client, auth_token, tmp_data)
+        csv_path = tmp_data / "data.csv"
+        csv_path.write_text("id\n1\n")
+        resp = fastapi_client.post(
+            "/db/projects/p/databases/d/import/t",
+            params={"path": str(csv_path)},
+            headers=h,
+        )
+        assert resp.status_code == 403
+
+
 class TestUnauthorized:
     def test_no_project_key_no_password(self, fastapi_client):
         # No password set → open access without header

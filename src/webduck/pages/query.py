@@ -68,6 +68,14 @@ def register():
         make_drawer(_)
         make_footer(_)
 
+        # Prevent the browser from opening dropped files as URLs — required
+        # even when the drop zone is disabled (write-protected), otherwise a
+        # drop would open the file in a new browser tab.
+        ui.run_javascript("""
+            document.addEventListener('dragover', function(e) { e.preventDefault(); });
+            document.addEventListener('drop', function(e) { e.preventDefault(); });
+        """)
+
         # ── Card 1: Project & DB Selection (shared) ────────────
         # Both the interactive editor and file upload use these dropdowns.
         # Selections are persisted per-user via the user_prefs system.
@@ -132,6 +140,10 @@ def register():
                 # during the initial page build before the panel exists.
                 history_ready = [False]
 
+                # Holds a callback (set by Card 3) that shows/hides the
+                # write-protection hint in the SQL upload drop zone.
+                _wp_hint_ref = [None]
+
                 def on_database_change():
                     if database_select.value:
                         set_user_pref(
@@ -139,6 +151,8 @@ def register():
                         )
                     if history_ready[0]:
                         render_history()
+                    if _wp_hint_ref[0]:
+                        _wp_hint_ref[0]()
 
                 database_select.on_value_change(on_database_change)
                 update_databases()
@@ -348,6 +362,26 @@ def register():
                 if not sql_input.value or not database_select.value:
                     return
 
+                # Write-protected databases only allow reads.  If the entered
+                # SQL contains a write statement (DDL/DML), show a clear,
+                # persistent popup — the execution still runs so the technical
+                # DuckDB error appears in the result area below.
+                from webduck.auth.manager import ProjectAuth
+                _pa = ctx.project_auth or ProjectAuth(ctx.storage.data_dir)
+                if _pa.is_database_write_protected(
+                    project_select.value, database_select.value
+                ):
+                    _write_kw = ("CREATE", "DROP", "ALTER", "INSERT",
+                                 "UPDATE", "DELETE", "TRUNCATE")
+                    _first_kw = sql_input.value.strip().upper().split()[0] if sql_input.value.strip() else ""
+                    if _first_kw in _write_kw:
+                        ui.notification(
+                            _("write_protection_hint"),
+                            type="negative",
+                            timeout=None,
+                            close_button=True,
+                        )
+
                 try:
                     results = ctx.storage.execute_queries(
                         project_select.value,
@@ -439,7 +473,11 @@ def register():
             ).style(f"color: {YELLOW_LIGHT}")
 
             dsf = _("drop_sql_file")
+            wp_text = _("write_protection_hint")
             # HTML drop zone: dashed border, hidden file input, info div.
+            # The main text lives in its own element so the write-protection
+            # hint can replace it inside the zone when a protected database
+            # is selected (same approach as the import widget label).
             drop_html = f"""
             <div id="sql-drop-zone" style="
                 border: 2px dashed #444;
@@ -450,7 +488,7 @@ def register():
                 cursor: pointer;
                 margin-bottom: 12px;
             ">
-                {dsf}
+                <div id="sql-drop-text">{dsf}</div>
                 <input type="file" id="sql-file-input"
                     accept=".sql" style="display:none;">
                 <div id="sql-file-info"
@@ -459,6 +497,45 @@ def register():
             </div>
             """
             ui.html(drop_html)
+
+            def _update_wp_hint():
+                """Show/hide the write-protection state in the drop zone.
+
+                For write-protected databases the drop zone itself is
+                disabled (no clicks, no drops, dimmed look) and its main
+                text is replaced by the write-protection hint.  The execute
+                button stays enabled — it is a no-op without a file anyway.
+                """
+                from webduck.auth.manager import ProjectAuth
+                _pa = ctx.project_auth or ProjectAuth(ctx.storage.data_dir)
+                _protected = bool(
+                    database_select.value
+                ) and _pa.is_database_write_protected(
+                    project_select.value, database_select.value
+                )
+                _zone_css = (
+                    "pointerEvents='none'; opacity='0.4'; "
+                    "borderColor='#666'; cursor='default';"
+                    if _protected
+                    else "pointerEvents='auto'; opacity='1'; "
+                         "borderColor='#444'; cursor='pointer';"
+                )
+                ui.run_javascript(
+                    f"""
+                    var zone = document.getElementById('sql-drop-zone');
+                    if (zone) {{
+                        zone.style.{_zone_css}
+                        var text = document.getElementById('sql-drop-text');
+                        if (text) {{
+                            text.textContent =
+                                '{wp_text if _protected else dsf}';
+                        }}
+                    }}
+                    """
+                )
+
+            _wp_hint_ref[0] = _update_wp_hint
+            _update_wp_hint()
 
             # Client-side JS: click opens file picker, drag highlights the
             # zone, drop reads the file as text and stores it for the server.
@@ -563,6 +640,26 @@ def register():
                 sql_text = js_result
                 if not sql_text:
                     return
+
+                # Write-protected databases only allow reads.  If the
+                # uploaded SQL contains a write statement (DDL/DML), show a
+                # clear, persistent popup — the execution still runs so the
+                # technical DuckDB error appears in the result area below.
+                from webduck.auth.manager import ProjectAuth
+                _pa = ctx.project_auth or ProjectAuth(ctx.storage.data_dir)
+                if _pa.is_database_write_protected(
+                    project_select.value, database_select.value
+                ):
+                    _write_kw = ("CREATE", "DROP", "ALTER", "INSERT",
+                                 "UPDATE", "DELETE", "TRUNCATE")
+                    _first_kw = sql_text.strip().upper().split()[0] if sql_text.strip() else ""
+                    if _first_kw in _write_kw:
+                        ui.notification(
+                            _("write_protection_hint"),
+                            type="negative",
+                            timeout=None,
+                            close_button=True,
+                        )
 
                 # Show a modal spinner while the queries execute.
                 with ui.dialog() as progress_dialog, ui.card().classes(

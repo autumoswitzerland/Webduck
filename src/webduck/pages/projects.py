@@ -713,6 +713,55 @@ def register():
                                             )
                                         )
 
+                                        # Write-protection toggle: locks the
+                                        # database so it can only be opened
+                                        # read-only. The edit_off icon turns
+                                        # amber while protection is active.
+                                        _protected = _pa.is_database_write_protected(
+                                            project, db_name
+                                        )
+
+                                        async def toggle_write_protection(
+                                            p=project, d=db_name
+                                        ):
+                                            if not require_user():
+                                                return
+                                            pa = (
+                                                ctx.project_auth
+                                                or ProjectAuth(
+                                                    ctx.storage.data_dir
+                                                )
+                                            )
+                                            new_state = (
+                                                not pa.is_database_write_protected(
+                                                    p, d
+                                                )
+                                            )
+                                            if pa.set_database_write_protected(
+                                                p, d, new_state
+                                            ):
+                                                nicegui_app.storage.user["flash"] = _(
+                                                    "write_protection_on"
+                                                    if new_state
+                                                    else "write_protection_off"
+                                                )
+                                                ui.navigate.reload()
+                                            else:
+                                                ui.notify(
+                                                    _("error"),
+                                                    type="negative",
+                                                )
+
+                                        ui.button(
+                                            on_click=toggle_write_protection,
+                                        ).props(
+                                            'icon="edit_off" flat dense'
+                                        ).classes(
+                                            "wd-icon-amber" if _protected else ""
+                                        ).style("color: #888;").tooltip(
+                                            _("write_protection")
+                                        ).props("tooltip-position=top")
+
                                         # Database delete with confirmation dialog.
                                         async def delete_db(
                                             p=project, d=db_name
@@ -749,7 +798,7 @@ def register():
                                                         if ctx.storage.trash_database(
                                                             p, d
                                                         ):
-                                                            pa.remove_database_password(
+                                                            pa.remove_database_config_entry(
                                                                 p, d
                                                             )
                                                             nicegui_app.storage.user["flash"] = _("moved_to_trash")

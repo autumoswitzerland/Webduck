@@ -98,3 +98,42 @@ class TestProjectAuth:
     def test_remove_database_password_nonexistent(self, project_auth, tmp_data):
         (tmp_data / "proj").mkdir()
         assert project_auth.remove_database_password("proj", "nope") is False
+
+    def test_write_protection_roundtrip(self, project_auth, tmp_data):
+        (tmp_data / "proj").mkdir()
+        assert project_auth.is_database_write_protected("proj", "db1") is False
+        assert project_auth.set_database_write_protected("proj", "db1", True) is True
+        assert project_auth.is_database_write_protected("proj", "db1") is True
+        assert project_auth.set_database_write_protected("proj", "db1", False) is True
+        assert project_auth.is_database_write_protected("proj", "db1") is False
+
+    def test_write_protection_defaults_false(self, project_auth, tmp_data):
+        (tmp_data / "proj").mkdir()
+        assert project_auth.is_database_write_protected("proj", "nope") is False
+
+    def test_write_protection_persists(self, project_auth, tmp_data):
+        (tmp_data / "proj").mkdir()
+        project_auth.set_database_write_protected("proj", "db1", True)
+        # Reload from disk.
+        from webduck.auth.manager import ProjectAuth
+        auth2 = ProjectAuth(tmp_data)
+        assert auth2.is_database_write_protected("proj", "db1") is True
+
+    def test_remove_password_keeps_write_protection(self, project_auth, tmp_data):
+        """Removing a password must not touch the write-protection flag."""
+        (tmp_data / "proj").mkdir()
+        project_auth.set_database_write_protected("proj", "db1", True)
+        project_auth.set_database_password("proj", "db1", "secret", "write")
+        assert project_auth.is_database_write_protected("proj", "db1") is True
+        project_auth.remove_database_password("proj", "db1")
+        assert project_auth.has_database_password("proj", "db1") is False
+        assert project_auth.is_database_write_protected("proj", "db1") is True
+
+    def test_remove_database_config_entry_clears_write_protection(self, project_auth, tmp_data):
+        """Deleting a database's config entry also clears the flag."""
+        (tmp_data / "proj").mkdir()
+        project_auth.set_database_write_protected("proj", "db1", True)
+        project_auth.set_database_password("proj", "db1", "secret", "write")
+        assert project_auth.remove_database_config_entry("proj", "db1") is True
+        assert project_auth.is_database_write_protected("proj", "db1") is False
+        assert project_auth.has_database_password("proj", "db1") is False
