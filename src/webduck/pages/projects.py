@@ -491,6 +491,33 @@ def register():
                                             if not require_user():
                                                 return
                                             size = ctx.storage.database_size(p, d)
+
+                                            # Compress feedback always appears as a
+                                            # dialog (whether the check aborts before
+                                            # the run or the run itself gained nothing).
+                                            def _compress_result_dialog(text, color):
+                                                with (
+                                                    ui.dialog() as rdlg,
+                                                    ui.card().classes(
+                                                        "items-center gap-4"
+                                                    ).style(
+                                                        "background: #1E1E1E; "
+                                                        "border-radius: 12px; "
+                                                        "padding: 24px 32px;"
+                                                    ),
+                                                ):
+                                                    ui.label(text).style(
+                                                        f"color: {color}"
+                                                    )
+                                                    ui.button(
+                                                        _("close"),
+                                                        on_click=rdlg.close,
+                                                    ).props(
+                                                        "outline color=grey"
+                                                    ).classes(
+                                                        "border-button"
+                                                    )
+                                                rdlg.open()
                                             # Re-check the current state on click: the
                                             # background hint from page load may be stale
                                             # (DuckDB can reclaim trailing free blocks on
@@ -529,9 +556,9 @@ def register():
                                                             _sizelabel.set_text(
                                                                 _fmt_bytes(size)
                                                             )
-                                                ui.notify(
+                                                _compress_result_dialog(
                                                     _("compress_no_gain"),
-                                                    type="info",
+                                                    TEXT_SOFT,
                                                 )
                                                 return
                                             size_label = (
@@ -616,32 +643,8 @@ def register():
                                                                             _sizelabel,
                                                                         )
                                                                     )
-                                                            def _result_dialog(text, color):
-                                                                with (
-                                                                    ui.dialog() as rdlg,
-                                                                    ui.card().classes(
-                                                                        "items-center gap-4"
-                                                                    ).style(
-                                                                        "background: #1E1E1E; "
-                                                                        "border-radius: 12px; "
-                                                                        "padding: 24px 32px;"
-                                                                    ),
-                                                                ):
-                                                                    ui.label(text).style(
-                                                                        f"color: {color}"
-                                                                    )
-                                                                    ui.button(
-                                                                        _("close"),
-                                                                        on_click=rdlg.close,
-                                                                    ).props(
-                                                                        "outline color=grey"
-                                                                    ).classes(
-                                                                        "border-button"
-                                                                    )
-                                                                rdlg.open()
-
                                                             if result["saved_bytes"] > 0:
-                                                                _result_dialog(
+                                                                _compress_result_dialog(
                                                                     _("compress_success").format(
                                                                         _fmt_bytes(
                                                                             result[
@@ -656,7 +659,7 @@ def register():
                                                                     YELLOW_LIGHT,
                                                                 )
                                                             elif result["grew_bytes"] > 0:
-                                                                _result_dialog(
+                                                                _compress_result_dialog(
                                                                     _("compress_grew").format(
                                                                         _fmt_bytes(
                                                                             result[
@@ -671,7 +674,7 @@ def register():
                                                                     TEXT_SOFT,
                                                                 )
                                                             else:
-                                                                _result_dialog(
+                                                                _compress_result_dialog(
                                                                     _("compress_no_gain"),
                                                                     TEXT_SOFT,
                                                                 )
