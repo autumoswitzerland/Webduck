@@ -270,6 +270,84 @@ FastAPI ──┬── /admin/*   (JWT auth)    → Project/DB management
 - **Logging:** Rotated log files in `log/` (configurable), independent console logging
 - **Concurrency:** Per-file reader-writer locks — parallel reads, exclusive writes (DuckDB single-writer model)
 
+## Reverse Proxy & HTTPS
+
+WebDuck has no built-in TLS support. For running over HTTPS, put a reverse proxy in front that terminates TLS and forwards requests to WebDuck (default port `8998`).
+
+WebDuck will continue to run over HTTP; the proxy handles certificates and HTTPS.
+
+### Nginx
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name webduck.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/webduck.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/webduck.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8998;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+
+server {
+    listen 80;
+    server_name webduck.example.com;
+    return 301 https://$host$request_uri;
+}
+```
+
+> NiceGUI uses WebSockets, so the `Upgrade` and `Connection` headers must be set as shown above.
+
+### Caddy (automatic Let's Encrypt)
+
+```caddy
+webduck.example.com {
+    reverse_proxy localhost:8998
+}
+```
+
+Caddy automatically obtains and renews TLS certificates.
+
+### Traefik (Docker)
+
+```yaml
+services:
+  webduck:
+    image: autumoswitzerland/webduck
+    volumes:
+      - webduck_data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.webduck.rule=Host(`webduck.example.com`)"
+      - "traefik.http.routers.webduck.entrypoints=websecure"
+      - "traefik.http.routers.webduck.tls.certresolver=letsencrypt"
+      - "traefik.http.services.webduck.loadbalancer.server.port=8998"
+```
+
+### Directly with Uvicorn (optional)
+
+If you want WebDuck to serve TLS directly, you can run Uvicorn manually with certificate files. The `webduck start` command does not currently pass through SSL options:
+
+```bash
+uvicorn webduck.main:fastapi_app \
+  --host 0.0.0.0 \
+  --port 8998 \
+  --ssl-keyfile /path/to/key.pem \
+  --ssl-certfile /path/to/cert.pem
+```
+
+For production deployments, a reverse proxy is generally simpler and more secure than terminating TLS directly in WebDuck.
+
+
 ## Development
 
 ```bash
