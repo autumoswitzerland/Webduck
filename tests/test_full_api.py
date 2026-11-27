@@ -19,7 +19,7 @@ import threading
 import time
 
 import duckdb
-import httpx
+import httpx2 as httpx
 import pytest
 
 # ---------------------------------------------------------------------------

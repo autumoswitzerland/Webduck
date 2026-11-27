@@ -7,7 +7,7 @@
   a ready-to-use administration interface for DuckDB databases and data analytics
   — out of the box, just like the database admin tools that come with any hosting package.
 
-  <img src="https://img.shields.io/badge/version-1.5.0-FFD54F">
+  <img src="https://img.shields.io/badge/version-2.0.0-FFD54F">
   <img src="https://img.shields.io/badge/license-AGPLv3-orange">
   <img src="https://img.shields.io/badge/python-3.11+-blue">
 
@@ -72,6 +72,14 @@ export WEBDUCK_ADMIN_PASS=mypassword
 # Start - An admin user is created automatically
 docker compose up -d
 ```
+
+## DuckDB 2.0 compatibility
+
+WebDuck 2.0 requires DuckDB 2.0 LTS (`duckdb>=2.0,<2.1`).
+
+- **Existing databases stay readable.** DuckDB 2.0 opens DuckDB 1.x files without conversion and preserves their storage version when writing to them. Those files therefore remain readable by WebDuck 1.5.x.
+- **New files use storage version 69.** Databases created by WebDuck 2.0 use DuckDB 2.0's default storage format. **Compacting** a database also rebuilds the file, so compacting an older database upgrades it to the 2.0 format; after that it can no longer be opened by WebDuck 1.5.x.
+- **Linux x86_64 needs AVX2.** Official DuckDB 2.0 wheels for Linux x86_64 are built with AVX2 instructions. Docker inherits the host CPU, so an AVX1-only host cannot run WebDuck 2.0. Use the WebDuck 1.5.x line there. macOS x86_64 and arm64 are not affected.
 
 ## Quick Start
 

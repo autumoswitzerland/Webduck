@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-11-27
+
+### Changed
+- Require DuckDB 2.0 LTS (`duckdb>=2.0,<2.1`) instead of DuckDB 1.x. WebDuck has been
+  tested against DuckDB 2.0.0 and 2.0.1; the REST API, web UI and configuration
+  format are unchanged.
+- Existing DuckDB 1.x database files remain readable. DuckDB 2.0 opens them
+  without conversion and keeps their original storage version when writing to
+  them, so they stay readable by WebDuck 1.5.x.
+- Databases created by WebDuck 2.0 use DuckDB storage version 69. Compaction
+  rebuilds the database file, so compacting an older database upgrades it to
+  the 2.0 format and it can no longer be opened by WebDuck 1.5.x.
+- On Linux x86_64, DuckDB 2.0 wheels require AVX2. Docker inherits the host
+  CPU, so AVX1-only hosts cannot run WebDuck 2.0; WebDuck 1.5.x remains the
+  compatibility line for those systems. macOS x86_64 and arm64 are unaffected.
+
 ## [1.5.0] - 2026-08-13
 
 ### Added

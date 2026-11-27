@@ -1,8 +1,12 @@
+/Users/Mike/Development/git-ext/WebDuck/.venv/lib/python3.11/site-packages/pytest_asyncio/plugin.py:306: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to "function" scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session". Set it to "fixture-scope" to keep the current behavior.
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
 ============================= test session starts ==============================
-platform darwin -- Python 3.11.14, pytest-9.1.1, pluggy-1.6.0
+platform darwin -- Python 3.11.14, pytest-9.2.0, pluggy-1.7.0
 rootdir: /Users/Mike/Development/git-ext/WebDuck
 configfile: pyproject.toml
-plugins: asyncio-1.4.0, anyio-4.14.2
+plugins: anyio-4.16.0, asyncio-1.5.0
 asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
 collected 229 items
 
@@ -80,58 +84,8 @@ tests/test_dashboard_footer.py   PASS  test_footer_total_line_only_with_rows
 .  PASS  test_footer_both_lines_when_rows_and_trash
 .  PASS  test_footer_empty_when_no_rows_and_no_trash
 .                                      [ 30%]
-tests/test_full_api.py   PASS  test_login
-.  PASS  test_login_wrong_password
-.  PASS  test_login_nonexistent
-.  PASS  test_admin_no_token
-.  PASS  test_create_projects
-.  PASS  test_verify_projects_gui
-.  PASS  test_reorder_projects
-.  PASS  test_verify_reorder_gui
-.  PASS  test_duplicate_project
-.  PASS  test_create_databases
-.  PASS  test_verify_databases_gui
-.  PASS  test_duplicate_database
-.  PASS  test_reserved_database_name
-.  PASS  test_set_password
-.  PASS  test_verify_lock_icon_gui
-.  PASS  test_query_no_key_rejected
-.  PASS  test_query_wrong_key_rejected
-.  PASS  test_query_correct_key
-.  PASS  test_open_db_no_password
-.  PASS  test_enable_write_protection
-.  PASS  test_write_blocked_while_protected
-.  PASS  test_read_allowed_while_protected
-.  PASS  test_disable_write_protection
-.  PASS  test_create_table
-.  PASS  test_verify_table_gui
-.  PASS  test_select_all
-.  PASS  test_filtered_query
-.  PASS  test_create_view
-.  PASS  test_invalid_sql
-.  PASS  test_import_csv
-.  PASS  test_verify_import_gui
-.  PASS  test_export_csv
-.  PASS  test_import_nonexistent_file
-.  PASS  test_import_parquet
-.  PASS  test_verify_parquet_import
-.  PASS  test_export_parquet
-.  PASS  test_import_nonexistent_parquet
-.  PASS  test_import_json
-.  PASS  test_verify_json_import
-.  PASS  test_export_json
-.  PASS  test_import_nonexistent_json
-.  PASS  test_list_projects_public
-.  PASS  test_list_databases_public
-.  PASS  test_delete_database
-.  PASS  test_verify_database_deleted_gui
-.  PASS  test_delete_project
-.  PASS  test_verify_project_deleted_gui
-.  PASS  test_delete_remaining
-.  PASS  test_health
-. [ 51%]
-  PASS  test_parallel_reads_over_http
-.                                                                        [ 51%]
+tests/test_full_api.py sssssssssssssssssssssssssssssssssssssssssssssssss [ 51%]
+s                                                                        [ 51%]
 tests/test_logging.py   PASS  test_logging_disabled_by_default
 .  PASS  test_logging_enabled_creates_file
 .  PASS  test_log_query_does_nothing_when_disabled
@@ -247,6 +201,6 @@ tests/test_user_prefs.py   PASS  test_inserts_newest_first
 .  PASS  test_missing_user_is_noop
 .            [100%]
 
-  229/229 tests passed
+  179/179 tests passed
 
-============================= 229 passed in 57.26s =============================
+================== 179 passed, 50 skipped in 71.20s (0:01:11) ==================

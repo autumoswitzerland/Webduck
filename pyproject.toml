@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "webduck"
-version = "1.5.0"
+version = "2.0.0"
 description = "A DuckDB server with REST API and Web UI"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -49,7 +49,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
     "nicegui>=2.0.0",
-    "duckdb>=1.0.0",
+    "duckdb>=2.0,<2.1",
     "pyjwt>=2.8.0",
     "bcrypt>=4.1.0",
     "pyyaml>=6.0",

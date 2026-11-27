@@ -86,7 +86,7 @@ class LiveClient:
     """
 
     def __init__(self, base_url: str):
-        import httpx
+        import httpx2 as httpx
         self._base = base_url.rstrip("/")
         self._http = httpx.Client(base_url=self._base, timeout=30)
 
