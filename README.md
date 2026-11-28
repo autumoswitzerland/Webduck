@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/icon.svg" width="128">
+  <img src="https://raw.githubusercontent.com/autumoswitzerland/Webduck/refs/heads/master/src/webduck/static/icon.png" width="256">
   <h1>WebDuck</h1>
 
   A self-hosted DuckDB-as-a-Service server with REST API and Web UI.
